@@ -835,6 +835,12 @@ BOOST_AUTO_TEST_CASE( assert_op_test )
       pred_field_lit_cmp( nathan_key_id, 1, fc::raw::pack( lit_key ), opc_not_equal_to )
       )
       );
+
+   string s_pred = fc::json::to_string( predicate(
+      pred_field_lit_cmp( nathan_key_id, 1, fc::raw::pack( lit_key ), opc_not_equal_to )
+      ) );
+   wdump( (s_pred) );
+
    trx.operations.back() = op;
    trx.sign( nathan_key_id, nathan_private_key );
    BOOST_CHECK_THROW( PUSH_TX( db, trx ), fc::exception );
