@@ -24,6 +24,7 @@
 #include <graphene/chain/limit_order_object.hpp>
 #include <graphene/chain/call_order_object.hpp>
 #include <graphene/chain/key_object.hpp>
+#include <graphene/chain/predicate.hpp>
 #include <graphene/net/node.hpp>
 #include <fc/api.hpp>
 
@@ -213,6 +214,9 @@ namespace graphene { namespace app {
 
          /// @brief Get a JSON object listing objects' reflectable fields
          std::string get_reflect_object_info()const;
+
+         /// @brief Get a hexdump of the serialized binary form of a predicate
+         std::string get_predicate_hex(const predicate& pred)const;
       private:
          /** called every time a block is applied to report the objects that were changed */
          void on_objects_changed(const vector<object_id_type>& ids);
@@ -348,6 +352,7 @@ FC_API(graphene::app::database_api,
        (cancel_all_subscriptions)
        (get_transaction_hex)
        (get_reflect_object_info)
+       (get_predicate_hex)
      )
 FC_API(graphene::app::history_api, (get_account_history))
 FC_API(graphene::app::network_api, (broadcast_transaction)(add_node)(get_connected_peers))

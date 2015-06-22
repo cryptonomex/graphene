@@ -21,6 +21,7 @@
 #include <graphene/chain/database.hpp>
 #include <graphene/chain/db_reflect_cmp.hpp>
 #include <graphene/chain/operation_history_object.hpp>
+#include <graphene/chain/predicate.hpp>
 #include <graphene/utilities/key_conversion.hpp>
 
 #include <fc/crypto/hex.hpp>
@@ -412,6 +413,11 @@ namespace graphene { namespace app {
     std::string database_api::get_reflect_object_info()const
     {
        return graphene::chain::impl::get_reflect_object_info_str();
+    }
+
+    std::string database_api::get_predicate_hex(const predicate& pred)const
+    {
+       return fc::to_hex(fc::raw::pack(pred));
     }
 
     vector<operation_history_object> history_api::get_account_history(account_id_type account, operation_history_id_type stop, int limit, operation_history_id_type start) const
