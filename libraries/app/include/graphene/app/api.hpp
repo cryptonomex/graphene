@@ -210,6 +210,9 @@ namespace graphene { namespace app {
 
          /// @brief Get a hexdump of the serialized binary form of a transaction
          std::string get_transaction_hex(const signed_transaction& trx)const;
+
+         /// @brief Get a JSON object listing objects' reflectable fields
+         std::string get_reflect_object_info()const;
       private:
          /** called every time a block is applied to report the objects that were changed */
          void on_objects_changed(const vector<object_id_type>& ids);
@@ -344,6 +347,7 @@ FC_API(graphene::app::database_api,
        (unsubscribe_from_market)
        (cancel_all_subscriptions)
        (get_transaction_hex)
+       (get_reflect_object_info)
      )
 FC_API(graphene::app::history_api, (get_account_history))
 FC_API(graphene::app::network_api, (broadcast_transaction)(add_node)(get_connected_peers))

@@ -28,6 +28,9 @@ object_descriptor = ${object_descriptor}
 
 #include <graphene/db/object_database.hpp>
 
+#include <sstream>
+#include <string>
+
 namespace graphene { namespace chain { namespace impl {
 
 bool cmp_attr_impl(
@@ -38,6 +41,19 @@ bool cmp_attr_impl(
    )
 {
 ${cmp_attr_impl_body}
+}
+
+static const char* const reflect_object_info_lines[] =
+{
+${cpp_object_descriptor}
+};
+
+std::string get_reflect_object_info_str()
+{
+   std::ostringstream result;
+   for( size_t i=0; i<sizeof(reflect_object_info_lines)/sizeof(reflect_object_info_lines[0]); i++ )
+      result << reflect_object_info_lines[i];
+   return result.str();
 }
 
 } } } // graphene::chain::detail

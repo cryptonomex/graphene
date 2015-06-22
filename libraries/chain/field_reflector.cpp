@@ -195,6 +195,74 @@ static const char generated_file_banner[] =
 "//                                                                  //\n"
 ;
 
+std::string escape_string_for_c_source_code(const std::string& input)
+{
+   std::ostringstream escaped_string;
+   escaped_string << "\"";
+   for (unsigned i = 0; i < input.size(); ++i)
+   {
+      switch (input[i])
+      {
+         case '\a': 
+            escaped_string << "\\a";
+            break;
+         case '\b': 
+            escaped_string << "\\b";
+            break;
+         case '\t': 
+            escaped_string << "\\t";
+            break;
+         case '\n': 
+            escaped_string << "\\n";
+            break;
+         case '\v': 
+            escaped_string << "\\v";
+            break;
+         case '\f': 
+            escaped_string << "\\f";
+            break;
+         case '\r': 
+            escaped_string << "\\r";
+            break;
+         case '\\': 
+            escaped_string << "\\\\";
+            break;
+         case '\"': 
+            escaped_string << "\\\"";
+            break;
+         default:
+            escaped_string << input[i];
+      }
+   }
+   escaped_string << "\"";
+   return escaped_string.str();
+}
+
+std::string split_escape_string(const std::string& input, size_t partsize=64)
+{
+   // We split the escaped string into multiple lines and re-assemble
+   // it at run-time because some compilers (MS) do not support
+   // large string constants
+   size_t n = input.size();
+   bool first = true;
+   std::ostringstream out;
+   for( size_t i=0; i<n; i+=partsize )
+   {
+      std::string ss = input.substr(i, partsize);
+      std::string escaped = escape_string_for_c_source_code( ss );
+      if( ss == "" )
+         continue;
+      if( first )
+         first = false;
+      else
+         out << ",\n";
+      out << escaped;
+   }
+   if( first )
+      out << "\"\"";
+   return out.str();
+}
+
 int main( int argc, char** argv )
 {
    try
@@ -217,9 +285,12 @@ int main( int argc, char** argv )
 
       fc::mutable_variant_object tmpl_params;
 
+      std::string str_object_types = fc::json::to_string( g_vo_object_types );
+
       tmpl_params["generated_file_banner"] = generated_file_banner;
-      tmpl_params["object_descriptor"] = fc::json::to_string( g_vo_object_types );
+      tmpl_params["object_descriptor"] = str_object_types;
       tmpl_params["cmp_attr_impl_body"] = generate_cmp_attr_impl( switch_table );
+      tmpl_params["cpp_object_descriptor"] = split_escape_string( str_object_types );
 
       std::ifstream template_file( argv[1] );
       std::stringstream ss;

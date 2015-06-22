@@ -55,6 +55,13 @@ bool cmp_attr_impl(
    const std::vector<char>& lit,
    uint8_t opc
    );
+
+/**
+ * Get information about the objects and fields accessible
+ * to cmp_attr_impl.
+ */
+std::string get_reflect_object_info_str();
+
 }
 
 } }
