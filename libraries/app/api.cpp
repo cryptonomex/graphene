@@ -21,7 +21,6 @@
 #include <graphene/chain/database.hpp>
 #include <graphene/chain/db_reflect_cmp.hpp>
 #include <graphene/chain/operation_history_object.hpp>
-#include <graphene/chain/predicate.hpp>
 #include <graphene/utilities/key_conversion.hpp>
 
 #include <fc/crypto/hex.hpp>
