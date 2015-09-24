@@ -68,6 +68,8 @@ add_library( graphene_chain
 
              block_database.cpp
 
+             db_logger.cpp
+
              ${HEADERS}
            )
 

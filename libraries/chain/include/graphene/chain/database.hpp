@@ -40,6 +40,8 @@ namespace graphene { namespace chain {
    using graphene::db::abstract_object;
    using graphene::db::object;
 
+   namespace detail { class database_logger; }
+
    /**
     *   @class database
     *   @brief tracks the blockchain state in an extensible manner
@@ -65,7 +67,8 @@ namespace graphene { namespace chain {
             skip_merkle_check           = 1 << 7,  ///< used while reindexing
             skip_assert_evaluation      = 1 << 8,  ///< used while reindexing
             skip_undo_history_check     = 1 << 9,  ///< used while reindexing
-            skip_witness_schedule_check = 1 << 10  ///< used whiel reindexing
+            skip_witness_schedule_check = 1 << 10, ///< used while reindexing
+            skip_log_push_block         = 1 << 11  ///< used when generate_block() calls push_block()
          };
 
          /**
@@ -385,6 +388,8 @@ namespace graphene { namespace chain {
          /** when popping a block, the transactions that were removed get cached here so they
           * can be reapplied at the proper time */
          std::deque< signed_transaction >       _popped_tx;
+
+         std::unique_ptr< detail::database_logger > _logger;
 
          /**
           * @}

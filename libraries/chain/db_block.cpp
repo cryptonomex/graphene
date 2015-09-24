@@ -17,6 +17,7 @@
  */
 
 #include <graphene/chain/database.hpp>
+#include <graphene/chain/db_logger.hpp>
 #include <graphene/chain/db_with.hpp>
 
 #include <graphene/chain/block_summary_object.hpp>
@@ -102,6 +103,9 @@ std::vector<block_id_type> database::get_block_ids_on_fork(block_id_type head_of
  */
 bool database::push_block(const signed_block& new_block, uint32_t skip)
 {
+   if( (!(skip & skip_log_push_block)) && _logger && !before_last_checkpoint() )
+      _logger->log_push_block( new_block, skip );
+
    //idump((new_block.block_num())(new_block.id())(new_block.timestamp)(new_block.previous));
    bool result;
    detail::with_skip_flags( *this, skip, [&]()
@@ -205,6 +209,8 @@ bool database::_push_block(const signed_block& new_block)
  */
 processed_transaction database::push_transaction( const signed_transaction& trx, uint32_t skip )
 { try {
+   if( _logger && !before_last_checkpoint() )
+      _logger->log_push_transaction( trx, skip );
    processed_transaction result;
    detail::with_skip_flags( *this, skip, [&]()
    {
@@ -270,6 +276,9 @@ signed_block database::generate_block(
    uint32_t skip /* = 0 */
    )
 {
+   if( _logger && !before_last_checkpoint() )
+      _logger->log_generate_block( when, witness_id, block_signing_private_key.get_public_key(), skip );
+
    signed_block result;
    detail::with_skip_flags( *this, skip, [&]()
    {
@@ -372,7 +381,7 @@ signed_block database::_generate_block(
    // TODO:  Move this to _push_block() so session is restored.
    FC_ASSERT( fc::raw::pack_size(pending_block) <= get_global_properties().parameters.maximum_block_size );
 
-   push_block( pending_block, skip );
+   push_block( pending_block, skip | database::skip_log_push_block );
 
    return pending_block;
 } FC_CAPTURE_AND_RETHROW( (witness_id) ) }
