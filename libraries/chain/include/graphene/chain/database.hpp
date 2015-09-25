@@ -251,8 +251,10 @@ namespace graphene { namespace chain {
 
          node_property_object& node_properties();
 
-
          uint32_t last_non_undoable_block_num() const;
+
+         void set_dblog_file( const std::string& filename );
+
          //////////////////// db_init.cpp ////////////////////
 
          void initialize_evaluators();

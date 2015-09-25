@@ -89,5 +89,17 @@ uint32_t database::last_non_undoable_block_num() const
    return head_block_num() - _undo_db.size();
 }
 
+void database::set_dblog_file( const std::string& filename )
+{
+   if( _checkpoints.size() == 0 )
+   {
+      wlog( "You seem to have enabled the dblog without any checkpoints" );
+      wlog( "It may take a long time to create the dblog if you give it a lot of blocks" );
+   }
+   if( filename == "" )
+      _logger.reset();
+   else
+      _logger.reset( new database_logger( filename ) );
+}
 
 } }
