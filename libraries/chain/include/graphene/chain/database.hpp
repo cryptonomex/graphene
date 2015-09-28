@@ -253,7 +253,7 @@ namespace graphene { namespace chain {
 
          uint32_t last_non_undoable_block_num() const;
 
-         void set_dblog_file( const std::string& filename );
+         void enable_dblog();
 
          //////////////////// db_init.cpp ////////////////////
 

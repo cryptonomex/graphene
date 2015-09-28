@@ -95,6 +95,12 @@ void database::wipe(const fc::path& data_dir, bool include_blocks)
    ilog("Wiping database", ("include_blocks", include_blocks));
    close();
    object_database::wipe(data_dir);
+   if( fc::exists( data_dir / "dblog.bin" ) )
+   {
+      // open and close the file with ios::trunc to set its size to 0
+      std::ofstream dblog_out( data_dir / "dblog.bin", ios::out | ios::binary | ios::trunc );
+      dblog_out.close();
+   }
    if( include_blocks )
       fc::remove_all( data_dir / "database" );
 }
@@ -123,6 +129,11 @@ void database::open(
          }
       }
       //idump((head_block_id())(head_block_num()));
+
+      if( fc::exists( data_dir / "dblog.bin" ) )
+      {
+         _logger.reset( new database_logger( data_dir / "dblog.bin" ) );
+      }
    }
    FC_CAPTURE_AND_RETHROW( (data_dir) )
 }
@@ -154,6 +165,7 @@ void database::close(uint32_t blocks_to_rewind)
    catch (...)
    {
    }
+   // TODO: Save popped blocks and re-apply them on startup
 
    object_database::flush();
    object_database::close();
@@ -162,6 +174,8 @@ void database::close(uint32_t blocks_to_rewind)
       _block_id_to_block.close();
 
    _fork_db.reset();
+
+   _logger.reset();
 }
 
 } }

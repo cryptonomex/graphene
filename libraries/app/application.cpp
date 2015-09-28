@@ -294,7 +294,7 @@ namespace detail {
          if( _options->count("enable-dblog") )
          {
             ilog("Enabling dblog");
-            _chain_db->set_dblog_file( _data_dir / "blockchain" / "dblog.bin" );
+            _chain_db->enable_dblog();
          }
 
          if( _options->count("replay-blockchain") )
@@ -311,7 +311,6 @@ namespace detail {
          if (!_options->count("genesis-json") &&
              _chain_db->get_chain_id() != graphene::egenesis::get_egenesis_chain_id()) {
             elog("Detected old database. Nuking and starting over.");
-            _chain_db->set_dblog_file("");
             _chain_db->wipe(_data_dir / "blockchain", true);
             _chain_db.reset();
             _chain_db = std::make_shared<chain::database>();
@@ -320,7 +319,7 @@ namespace detail {
             if( _options->count("enable-dblog") )
             {
                ilog("Enabling dblog on nuked chain");
-               _chain_db->set_dblog_file( _data_dir / "blockchain" / "dblog.bin" );
+               _chain_db->enable_dblog();
             }
          }
 
