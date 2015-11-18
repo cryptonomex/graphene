@@ -86,6 +86,8 @@ namespace graphene { namespace chain {
       virtual operation_result evaluate(const operation& op) = 0;
       virtual operation_result apply(const operation& op) = 0;
 
+      virtual void pay_fee( share_type core_fee_paid );
+
       database& db()const;
 
       //void check_required_authorities(const operation& op);
@@ -100,8 +102,7 @@ namespace graphene { namespace chain {
        */
       void prepare_fee(account_id_type account_id, asset fee);
       /// Pays the fee and returns the number of CORE asset that were paid.
-      void pay_fee();
-
+      share_type convert_fee(); 
       object_id_type get_relative_id( object_id_type rel_id )const;
 
       asset                            fee_from_account;
@@ -206,7 +207,7 @@ namespace graphene { namespace chain {
          auto* eval = static_cast<DerivedEvaluator*>(this);
          const auto& op = o.get<typename DerivedEvaluator::operation_type>();
 
-         pay_fee();
+         pay_fee( convert_fee() );
 
          auto result = eval->do_apply(op);
 
