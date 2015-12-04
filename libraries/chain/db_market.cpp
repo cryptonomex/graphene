@@ -180,7 +180,7 @@ bool database::apply_order(const limit_order_object& new_order_object, bool allo
  *  3 - both were filled
  */
 template<typename OrderType>
-int database::match( const limit_order_object& usd, const OrderType& core, const price& match_price )
+int database::match( const limit_order_object& usd/*taker*/, const OrderType& core/*maker*/, const price& match_price )
 {
    assert( usd.sell_price.quote.asset_id == core.sell_price.base.asset_id );
    assert( usd.sell_price.base.asset_id  == core.sell_price.quote.asset_id );
@@ -213,13 +213,13 @@ int database::match( const limit_order_object& usd, const OrderType& core, const
            core_pays == core.amount_for_sale() );
 
    int result = 0;
-   result |= fill_order( usd, usd_pays, usd_receives );
-   result |= fill_order( core, core_pays, core_receives ) << 1;
+   result |= fill_order( usd, usd_pays, usd_receives, true/*taker*/ );
+   result |= fill_order( core, core_pays, core_receives, false/*maker*/ ) << 1;
    assert( result != 0 );
    return result;
 }
 
-int database::match( const limit_order_object& bid, const limit_order_object& ask, const price& match_price )
+int database::match( const limit_order_object& bid/*taker*/, const limit_order_object& ask/*maker*/, const price& match_price )
 {
    return match<limit_order_object>( bid, ask, match_price );
 }
@@ -258,7 +258,7 @@ asset database::match( const call_order_object& call,
    return call_receives;
 } FC_CAPTURE_AND_RETHROW( (call)(settle)(match_price)(max_settlement) ) }
 
-bool database::fill_order( const limit_order_object& order, const asset& pays, const asset& receives )
+bool database::fill_order( const limit_order_object& order, const asset& pays, const asset& receives, bool is_taker )
 { try {
    FC_ASSERT( order.amount_for_sale().asset_id == pays.asset_id );
    FC_ASSERT( pays.asset_id != receives.asset_id );
@@ -266,7 +266,7 @@ bool database::fill_order( const limit_order_object& order, const asset& pays, c
    const account_object& seller = order.seller(*this);
    const asset_object& recv_asset = receives.asset_id(*this);
 
-   auto issuer_fees = pay_market_fees( recv_asset, receives );
+   auto issuer_fees = pay_market_fees( recv_asset, receives, is_taker );
    pay_order( seller, receives - issuer_fees, pays );
 
    assert( pays.asset_id != receives.asset_id );
@@ -355,7 +355,7 @@ bool database::fill_order(const force_settlement_object& settle, const asset& pa
 { try {
    bool filled = false;
 
-   auto issuer_fees = pay_market_fees(get(receives.asset_id), receives);
+   auto issuer_fees = pay_market_fees(get(receives.asset_id), receives, true /*taker*/);
 
    if( pays < settle.balance )
    {
@@ -504,7 +504,8 @@ bool database::check_call_orders(const asset_object& mia, bool enable_black_swan
        fill_order(*old_call_itr, call_pays, call_receives);
 
        auto old_limit_itr = filled_limit ? limit_itr++ : limit_itr;
-       fill_order(*old_limit_itr, order_pays, order_receives);
+       /** this old_limit_itr is a maker because all margin calls are the taker */
+       fill_order(*old_limit_itr, order_pays, order_receives, false/*maker*/);
 
     } // whlie call_itr != call_end
 
@@ -523,11 +524,13 @@ void database::pay_order( const account_object& receiver, const asset& receives,
    adjust_balance(receiver.get_id(), receives);
 }
 
-asset database::calculate_market_fee( const asset_object& trade_asset, const asset& trade_amount )
+asset database::calculate_market_fee( const asset_object& trade_asset, const asset& trade_amount, bool is_taker )
 {
    assert( trade_asset.id == trade_amount.asset_id );
 
    if( !trade_asset.charges_market_fees() )
+      return trade_asset.amount(0);
+   if( !is_taker && !trade_asset.charges_maker_fee() )
       return trade_asset.amount(0);
    if( trade_asset.options.market_fee_percent == 0 )
       return trade_asset.amount(0);
@@ -543,9 +546,9 @@ asset database::calculate_market_fee( const asset_object& trade_asset, const ass
    return percent_fee;
 }
 
-asset database::pay_market_fees( const asset_object& recv_asset, const asset& receives )
+asset database::pay_market_fees( const asset_object& recv_asset, const asset& receives, bool is_taker )
 {
-   auto issuer_fees = calculate_market_fee( recv_asset, receives );
+   auto issuer_fees = calculate_market_fee( recv_asset, receives, is_taker );
    assert(issuer_fees <= receives );
 
    //Don't dirty undo state if not actually collecting any fees
