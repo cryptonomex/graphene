@@ -27,6 +27,62 @@ namespace graphene { namespace chain {
    bool is_valid_symbol( const string& symbol );
 
    /**
+    *  Defines the extension to the asset_options data in the protocol necessary to support the
+    *  maker/taker division of fees as well as the subsidies to market makers.
+    */
+   struct maker_asset_options_extension {
+      /** this flag indicates that this asset may only be issued as a result of market making activities. The
+       * asset has no authority to issue this asset or otherwise modify it if this flag is set.
+       */
+      bool         is_maker_issued_asset = false;
+
+      /**
+       * When this asset is traded on the markets, this percentage of the total traded will be exacted and paid
+       * to the issuer. This is a fixed point value, representing hundredths of a percent, i.e. a value of 100
+       * in this field means a 1% fee is charged on market trades of this asset. 
+       *
+       * This value is used in place of the market_fee_percent for orders that happen to be a "maker", 0 means that
+       * market makers don't pay market fees. 
+       */
+      uint16_t      maker_fee_percent = 0;
+
+      /**
+       *  This value defines the percent of the market and maker fees that get allocated to the
+       *  asset_dynamic_data_object::accumulated_maker_rewards which will then be used to buy back
+       *  the maker_reward_asset on the open market. If this value is 0, then no funds will be directed to
+       *  the maker_reward_percent.   
+       */
+      uint16_t      maker_reward_percent = 0;
+
+      /**
+       *  The asset that should be issued when the market maker provides liquidity, it must be created/flagged as
+       *  a maker-issued-asset. This asset must exist, and have the is_maker_issued_asset flag set to true and must
+       *  have the same issuer as this asset.
+       */
+      optional<asset_id_type> maker_reward_asset;
+
+      /**
+       *  Reward Decay Rate, each day the maker reward as a percent of volume should decay so that early 
+       *  liquidity providers benefit exponentially more than those who provide liquidity later. A value
+       *  of 10,000 means it should decay at 1% per day.  The default value of 200 means means the rewards
+       *  will decay with a half-life of 1 year.  Those who provide liquidity on the first day get 2x the
+       *  reward as those who provide liquidity 1 year later.
+       */
+      uint16_t  daily_reward_decay_rate = 200;
+
+      void validate() {
+         FC_ASSERT( daily_reward_decay_rate <= 10000 );
+         FC_ASSERT( maker_reward_percent <= 10000 );
+         FC_ASSERT( maker_fee_percent <= 10000 );
+         if( is_maker_issued_asset )
+            FC_ASSERT( maker_reward_percent == 0 );
+      }
+   };
+
+   typedef static_variant<void_t,maker_asset_options_extension>  asset_options_extension;
+   typedef flat_set<asset_options_extension>                     asset_options_extensions_type;
+
+   /**
     * @brief The asset_options struct contains options available on all assets in the network
     *
     * @note Changes to this struct will break protocol compatibility
@@ -72,8 +128,8 @@ namespace graphene { namespace chain {
        * data that describes the meaning/purpose of this asset, fee will be charged proportional to
        * size of description.
        */
-      string description;
-      extensions_type extensions;
+      string                        description;
+      asset_options_extensions_type extensions;
 
       /// Perform internal consistency checks.
       /// @throws fc::exception if any check fails
@@ -445,6 +501,14 @@ FC_REFLECT( graphene::chain::bitasset_options,
             (short_backing_asset)
             (extensions)
           )
+
+FC_REFLECT( graphene::chain::maker_asset_options_extension, 
+            (is_maker_issued_asset)
+            (maker_fee_percent)
+            (maker_reward_percent)
+            (maker_reward_asset)
+            (daily_reward_decay_rate) )
+
 
 
 FC_REFLECT( graphene::chain::asset_create_operation::fee_parameters_type, (symbol3)(symbol4)(long_symbol)(price_per_kbyte) )

@@ -85,10 +85,22 @@ void_result asset_create_evaluator::do_evaluate( const asset_create_operation& o
    {
       FC_ASSERT( is_valid_symbol_old( op.symbol ) );
    }
+#ifdef _MSC_VER
+# pragma message ("WARNING:HARDFORK remove this check after HARDFORK_468_TIME 
+#else
+# warning HARDFORK remove this check after HARDFORK_468_TIME
+#endif
+   if( d.head_block_time() <= HARDFORK_468_TIME ) {
+      /// until this hard fork goes into effect there are no valid extensions that may be included.
+      FC_ASSERT( op.common_options.extensions.size() == 0 );
+   }
+
+   /// TODO: perform any validation necessary for common_options extensions. 
 
    const auto& chain_parameters = d.get_global_properties().parameters;
    FC_ASSERT( op.common_options.whitelist_authorities.size() <= chain_parameters.maximum_asset_whitelist_authorities );
    FC_ASSERT( op.common_options.blacklist_authorities.size() <= chain_parameters.maximum_asset_whitelist_authorities );
+   
 
    // Check that all authorities do exist
    for( auto id : op.common_options.whitelist_authorities )
