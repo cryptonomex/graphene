@@ -58,6 +58,13 @@ using namespace std;
 
 class database_api_impl;
 
+struct order_book {
+  string                        base;
+  string                        quote;
+  vector< pair<double,double> > bids;
+  vector< pair<double,double> > asks;
+};
+
 /**
  * @brief The database_api class implements the RPC API for the chain database.
  *
@@ -273,6 +280,7 @@ class database_api
       /////////////////////
       // Markets / feeds //
       /////////////////////
+      order_book   get_order_book( const string& base, const string& quote, uint32_t limit )const;
 
       /**
        * @brief Get limit orders in a given market
@@ -472,6 +480,7 @@ class database_api
 };
 
 } }
+FC_REFLECT( graphene::app::order_book, (base)(quote)(bids)(asks) );
 
 FC_API(graphene::app::database_api,
    // Objects
@@ -521,6 +530,7 @@ FC_API(graphene::app::database_api,
    (lookup_asset_symbols)
 
    // Markets / feeds
+   (get_order_book)
    (get_limit_orders)
    (get_call_orders)
    (get_settle_orders)

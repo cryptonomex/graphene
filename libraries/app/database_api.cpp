@@ -37,6 +37,7 @@ namespace graphene { namespace app {
 
 class database_api_impl;
 
+
 class database_api_impl : public std::enable_shared_from_this<database_api_impl>
 {
    public:
@@ -85,14 +86,14 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
 
       // Assets
       vector<optional<asset_object>> get_assets(const vector<asset_id_type>& asset_ids)const;
-      vector<asset_object> list_assets(const string& lower_bound_symbol, uint32_t limit)const;
+      vector<asset_object>           list_assets(const string& lower_bound_symbol, uint32_t limit)const;
       vector<optional<asset_object>> lookup_asset_symbols(const vector<string>& symbols_or_ids)const;
 
       // Markets / feeds
-      vector<limit_order_object> get_limit_orders(asset_id_type a, asset_id_type b, uint32_t limit)const;
-      vector<call_order_object> get_call_orders(asset_id_type a, uint32_t limit)const;
-      vector<force_settlement_object> get_settle_orders(asset_id_type a, uint32_t limit)const;
-      vector<call_order_object> get_margin_positions( const account_id_type& id )const;
+      vector<limit_order_object>         get_limit_orders(asset_id_type a, asset_id_type b, uint32_t limit)const;
+      vector<call_order_object>          get_call_orders(asset_id_type a, uint32_t limit)const;
+      vector<force_settlement_object>    get_settle_orders(asset_id_type a, uint32_t limit)const;
+      vector<call_order_object>          get_margin_positions( const account_id_type& id )const;
       void subscribe_to_market(std::function<void(const variant&)> callback, asset_id_type a, asset_id_type b);
       void unsubscribe_from_market(asset_id_type a, asset_id_type b);
 
@@ -876,6 +877,41 @@ vector<optional<asset_object>> database_api_impl::lookup_asset_symbols(const vec
 vector<limit_order_object> database_api::get_limit_orders(asset_id_type a, asset_id_type b, uint32_t limit)const
 {
    return my->get_limit_orders( a, b, limit );
+}
+order_book  database_api::get_order_book( const string& base, const string& quote, uint32_t limit )const
+{
+   order_book result;
+   result.base = base;
+   result.quote = quote;
+
+   auto assets = lookup_asset_symbols( {base,quote} );
+   FC_ASSERT( assets[0], "Invalid base asset symbol: ${s}", ("s",base) );
+   FC_ASSERT( assets[1], "Invalid quote asset symbol: ${s}", ("s",quote) );
+
+   auto base_id = assets[0]->id;
+   auto quote_id = assets[1]->id;
+   auto orders = get_limit_orders( base_id, quote_id, limit );
+
+
+   auto asset_to_real = [&]( const asset& a, int p ) { return double(a.amount.value)/pow( p, 10 ); };
+   auto price_to_real = [&]( const price& p ) {
+      if( p.base.asset_id == base_id )
+         return asset_to_real( p.base, assets[0]->precision ) / asset_to_real( p.quote, assets[1]->precision );
+      else
+         return asset_to_real( p.quote, assets[1]->precision ) / asset_to_real( p.base, assets[0]->precision );
+   };
+
+   for( const auto& o : orders ) {
+      if( o.sell_price.base.asset_id == base_id ) {
+          result.bids.push_back( std::make_pair(price_to_real(o.sell_price), 
+                                                asset_to_real(o.amount_for_sale(), assets[0]->precision)) );
+      } else {
+          result.asks.push_back( std::make_pair(price_to_real(o.sell_price), 
+                                                asset_to_real(o.amount_to_receive(), assets[0]->precision)) );
+      }
+   }
+
+   return result;
 }
 
 /**
