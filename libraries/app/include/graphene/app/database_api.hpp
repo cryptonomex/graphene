@@ -58,11 +58,63 @@ using namespace std;
 
 class database_api_impl;
 
-struct order_book {
+struct order_book 
+{
   string                        base;
   string                        quote;
   vector< pair<double,double> > bids;
   vector< pair<double,double> > asks;
+};
+
+struct market_ticker
+{
+   string                       base;
+   string                       quote;
+   double                       last;
+   double                       lowest_ask;
+   double                       highest_bid;
+   double                       percent_change;
+   double                       base_volume;
+   double                       quote_volume;
+};
+
+struct market_volume
+{
+   string                       base;
+   string                       quote;
+   double                       base_volume;
+   double                       quote_volume;
+};
+
+struct candlestick_data
+{
+   uint32_t                     date;
+   double                       high;
+   double                       low;
+   double                       open;
+   double                       close;
+   double                       volume;
+   double                       quote_volume;
+   double                       weighted_average;
+};
+
+struct loan_order
+{
+   string                       asset;
+   double                       rate;
+   double                       ammount;
+   uint16_t                     range_min;
+   uint16_t                     range_max;
+};
+
+enum candlestick_period
+{
+   FIVE_MIN,
+   FIFTEEN_MIN,
+   THIRTY_MIN,
+   TWO_HOUR,
+   FOUR_HOUR,
+   ONE_DAY
 };
 
 /**
@@ -280,7 +332,6 @@ class database_api
       /////////////////////
       // Markets / feeds //
       /////////////////////
-      order_book   get_order_book( const string& base, const string& quote, uint32_t limit )const;
 
       /**
        * @brief Get limit orders in a given market
@@ -329,7 +380,58 @@ class database_api
        * @param a First asset ID
        * @param b Second asset ID
        */
-      void unsubscribe_from_market(asset_id_type a, asset_id_type b);
+      void unsubscribe_from_market( asset_id_type a, asset_id_type b );
+      
+      /**
+       * @brief Returns the ticker for the market assetA:assetB
+       * @param a String name of the first asset
+       * @param b String name of the second asset
+       * @return The market ticker for the past 24 hours.
+       */
+      market_ticker get_ticker( const string& base, const string& quote )const;
+      
+      /**
+       * @brief Returns the 24 hour volume for the market assetA:assetB
+       * @param a String name of the first asset
+       * @param b String name of the second asset
+       * @return The market volume over the past 24 hours
+       */
+      market_volume get_24_volume( const string& base, const string& quote )const;
+      
+      /**
+       * @brief Returns the order book for the market base:quote
+       * @param base String name of the first asset
+       * @param quote String name of the second asset
+       * @param depth of the order book. Up to depth of each asks and bids, capped at 50. Prioritizes most moderate of each
+       * @return Order book of the market
+       */
+      order_book get_order_book( const string& base, const string& quote, unsigned limit = 50 )const;
+      
+      /**
+       * @brief Returns recent trades for the market assetA:assetB
+       * @param a String name of the first asset
+       * @param b String name of the second asset
+       * @param stop Stop time as a UNIX timestamp
+       * @param limit Number of trasactions to retrieve, capped at 100
+       * @param start Start time as a UNIX timestamp
+       * @return Recent transactions in the market
+       */
+      vector<operation_history_object> get_trade_history( const string& base, const string& quote, uint32_t stop = 0, unsigned limit = 100, uint32_t start = 0 )const;
+      
+      /**
+       * @brief Returns chart data
+       * TODO: Define what the parameters of this should be to limit abuse.
+       */
+      vector<candlestick_data> get_chart_data( const string& asset, uint32_t start, uint32_t stop, candlestick_period period)const;
+      
+      //TODO: Return currencies same info as get_objects for an asset? Should we combine multiple API calls into this single call?
+      
+      /**
+       * @brief
+       */
+      vector<loan_order> get_loan_orders( const string& asset )const;
+      
+      
 
       ///////////////
       // Witnesses //
@@ -481,6 +583,11 @@ class database_api
 
 } }
 FC_REFLECT( graphene::app::order_book, (base)(quote)(bids)(asks) );
+FC_REFLECT( graphene::app::market_ticker, (base)(quote)(last)(lowest_ask)(highest_bid)(percent_change)(base_volume)(quote_volume) );
+FC_REFLECT( graphene::app::market_volume, (base)(quote)(base_volume)(quote_volume) );
+FC_REFLECT( graphene::app::candlestick_data, (date)(high)(low)(open)(close)(volume)(quote_volume)(weighted_average) );
+FC_REFLECT( graphene::app::loan_order, (asset)(rate)(ammount)(range_min)(range_max) );
+FC_REFLECT_ENUM( graphene::app::candlestick_period, (FIVE_MIN)(FIFTEEN_MIN)(THIRTY_MIN)(TWO_HOUR)(FOUR_HOUR)(ONE_DAY) );
 
 FC_API(graphene::app::database_api,
    // Objects
@@ -537,6 +644,11 @@ FC_API(graphene::app::database_api,
    (get_margin_positions)
    (subscribe_to_market)
    (unsubscribe_from_market)
+   (get_ticker)
+   (get_24_volume)
+   (get_trade_history)
+   (get_chart_data)
+   (get_loan_orders)
 
    // Witnesses
    (get_witnesses)

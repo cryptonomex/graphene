@@ -96,6 +96,12 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
       vector<call_order_object>          get_margin_positions( const account_id_type& id )const;
       void subscribe_to_market(std::function<void(const variant&)> callback, asset_id_type a, asset_id_type b);
       void unsubscribe_from_market(asset_id_type a, asset_id_type b);
+      market_ticker                      get_ticker( const string& base, const string& quote )const;
+      market_volume                      get_24_volume( const string& base, const string& quote )const;
+      order_book                         get_order_book( const string& base, const string& quote, unsigned limit = 50 )const;
+      vector<operation_history_object>   get_trade_history( const string& base, const string& quote, uint32_t stop, unsigned limit, uint32_t start )const;
+      vector<candlestick_data>           get_chart_data( const string& asset, uint32_t start, uint32_t stop, candlestick_period period)const;
+      vector<loan_order>                 get_loan_orders( const string& asset )const;
 
       // Witnesses
       vector<optional<witness_object>> get_witnesses(const vector<witness_id_type>& witness_ids)const;
@@ -878,41 +884,6 @@ vector<limit_order_object> database_api::get_limit_orders(asset_id_type a, asset
 {
    return my->get_limit_orders( a, b, limit );
 }
-order_book  database_api::get_order_book( const string& base, const string& quote, uint32_t limit )const
-{
-   order_book result;
-   result.base = base;
-   result.quote = quote;
-
-   auto assets = lookup_asset_symbols( {base,quote} );
-   FC_ASSERT( assets[0], "Invalid base asset symbol: ${s}", ("s",base) );
-   FC_ASSERT( assets[1], "Invalid quote asset symbol: ${s}", ("s",quote) );
-
-   auto base_id = assets[0]->id;
-   auto quote_id = assets[1]->id;
-   auto orders = get_limit_orders( base_id, quote_id, limit );
-
-
-   auto asset_to_real = [&]( const asset& a, int p ) { return double(a.amount.value)/pow( p, 10 ); };
-   auto price_to_real = [&]( const price& p ) {
-      if( p.base.asset_id == base_id )
-         return asset_to_real( p.base, assets[0]->precision ) / asset_to_real( p.quote, assets[1]->precision );
-      else
-         return asset_to_real( p.quote, assets[1]->precision ) / asset_to_real( p.base, assets[0]->precision );
-   };
-
-   for( const auto& o : orders ) {
-      if( o.sell_price.base.asset_id == base_id ) {
-          result.bids.push_back( std::make_pair(price_to_real(o.sell_price), 
-                                                asset_to_real(o.amount_for_sale(), assets[0]->precision)) );
-      } else {
-          result.asks.push_back( std::make_pair(price_to_real(o.sell_price), 
-                                                asset_to_real(o.amount_to_receive(), assets[0]->precision)) );
-      }
-   }
-
-   return result;
-}
 
 /**
  *  @return the limit orders for both sides of the book for the two assets specified up to limit number on each side.
@@ -1019,6 +990,97 @@ void database_api_impl::unsubscribe_from_market(asset_id_type a, asset_id_type b
    if(a > b) std::swap(a,b);
    FC_ASSERT(a != b);
    _market_subscriptions.erase(std::make_pair(a,b));
+}
+
+market_ticker database_api::get_ticker( const string& base, const string& quote )const
+{
+   return my->get_ticker( base, quote );
+}
+
+market_ticker database_api_impl::get_ticker( const string& base, const string& quote )const
+{
+   FC_ASSERT( false, "database_api::get_ticker --- NYI" );
+}
+
+market_volume database_api::get_24_volume( const string& base, const string& quote )const
+{
+   return my->get_24_volume( base, quote );
+}
+
+market_volume database_api_impl::get_24_volume( const string& base, const string& quote )const
+{
+   FC_ASSERT( false, "database_api::get_24_volume --- NYI" );
+}
+
+order_book database_api::get_order_book( const string& base, const string& quote, unsigned limit )const
+{
+   return my->get_order_book( base, quote, limit);
+}
+
+order_book database_api_impl::get_order_book( const string& base, const string& quote, unsigned limit )const
+{
+   order_book result;
+   result.base = base;
+   result.quote = quote;
+
+   auto assets = lookup_asset_symbols( {base,quote} );
+   FC_ASSERT( assets[0], "Invalid base asset symbol: ${s}", ("s",base) );
+   FC_ASSERT( assets[1], "Invalid quote asset symbol: ${s}", ("s",quote) );
+
+   auto base_id = assets[0]->id;
+   auto quote_id = assets[1]->id;
+   auto orders = get_limit_orders( base_id, quote_id, limit );
+
+
+   auto asset_to_real = [&]( const asset& a, int p ) { return double(a.amount.value)/pow( p, 10 ); };
+   auto price_to_real = [&]( const price& p ) {
+      if( p.base.asset_id == base_id )
+         return asset_to_real( p.base, assets[0]->precision ) / asset_to_real( p.quote, assets[1]->precision );
+      else
+         return asset_to_real( p.quote, assets[1]->precision ) / asset_to_real( p.base, assets[0]->precision );
+   };
+
+   for( const auto& o : orders ) {
+      if( o.sell_price.base.asset_id == base_id ) {
+          result.bids.push_back( std::make_pair(price_to_real(o.sell_price), 
+                                                asset_to_real(o.amount_for_sale(), assets[0]->precision)) );
+      } else {
+          result.asks.push_back( std::make_pair(price_to_real(o.sell_price), 
+                                                asset_to_real(o.amount_to_receive(), assets[0]->precision)) );
+      }
+   }
+
+   return result;
+}
+
+vector<operation_history_object> database_api::get_trade_history( const string& base, const string& quote, uint32_t stop, unsigned limit, uint32_t start )const
+{
+   return my->get_trade_history( base, quote, stop, limit, start );
+}
+
+vector<operation_history_object> database_api_impl::get_trade_history( const string& base, const string& quote, uint32_t stop, unsigned limit, uint32_t start )const
+{
+   FC_ASSERT( false, "database_api::get_trade_history --- NYI" );
+}
+
+vector<candlestick_data> database_api::get_chart_data( const string& asset, uint32_t start, uint32_t stop, candlestick_period period)const
+{
+   return my->get_chart_data( asset, start, stop, period );
+}
+
+vector<candlestick_data> database_api_impl::get_chart_data( const string& asset, uint32_t start, uint32_t stop, candlestick_period period)const
+{
+   FC_ASSERT( false, "database_api::get_chart_data --- NYI" );
+}
+
+vector<loan_order> database_api::get_loan_orders( const string& asset )const
+{
+   return my->get_loan_orders( asset );
+}
+
+vector<loan_order> database_api_impl::get_loan_orders( const string& asset )const
+{
+   FC_ASSERT( false, "database_api::get_loan_orders --- NYI" );
 }
 
 //////////////////////////////////////////////////////////////////////
