@@ -1188,6 +1188,36 @@ BOOST_AUTO_TEST_CASE( witness_feeds )
    }
 }
 
+BOOST_AUTO_TEST_CASE( mia_backed_mia_feed )
+{
+   ACTORS( (izzy)(alice)(bob) );
+
+   // issue #480
+   // Create an MIA
+   asset_id_type usd_id = create_bitasset( "USDBIT", izzy_id ).id;
+   {
+      asset_create_operation create_op;
+      create_op.issuer = izzy_id;
+      create_op.fee = asset();
+      create_op.symbol = "ALPHA";
+      create_op.common_options.max_supply = GRAPHENE_MAX_SHARE_SUPPLY;
+      create_op.precision = 2;
+      create_op.common_options.market_fee_percent = GRAPHENE_1_PERCENT;
+      create_op.common_options.issuer_permissions = charge_market_fee;
+      create_op.common_options.flags = charge_market_fee;
+      create_op.common_options.core_exchange_rate = price({asset(1,1),asset(1)});
+      create_op.bitasset_opts = bitasset_options();
+
+      signed_transaction tx;
+      set_expiration( db, tx );
+      tx.operations.push_back(create_op);
+      tx.validate();
+      processed_transaction ptx = db.push_transaction(tx, ~0);
+   }
+   trx.operations.clear();
+   return db.get<asset_object>(ptx.operation_results[0].get<object_id_type>());
+   }
+}
 
 /**
  *  Create an order such that when the trade executes at the
