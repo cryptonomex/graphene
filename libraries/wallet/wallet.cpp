@@ -2140,6 +2140,89 @@ public:
          }
          return ss.str();
       };
+      m["get_order_book"] = [this](variant result, const fc::variants& a)
+      {
+         auto orders = result.as<order_book>();
+         auto bids = orders.bids;
+         auto asks = orders.asks;
+         std::stringstream ss;
+         std::stringstream sum_stream;
+         sum_stream << "Sum(" << orders.base << ')';
+         double bid_sum = 0;
+         double ask_sum = 0;
+         const int spacing = 20;
+         
+         auto prettify_num = [&]( double n ) 
+         { 
+            //ss << n;
+            if (abs( round( n ) - n ) < 0.00000000001 )
+            {
+               ss << setiosflags( !ios::fixed ) << (int) n;
+            }
+            else if (n - floor(n) < 0.000001)
+            {
+               ss << setiosflags( ios::fixed ) << setprecision(10) << n;
+            }
+            else
+            {
+               ss << setiosflags( ios::fixed ) << setprecision(6) << n;
+            }
+         };
+         
+         ss << setprecision( 8 ) << setiosflags( ios::fixed ) << setiosflags( ios::left );
+         
+         ss << ' ' << setw( (spacing * 4) + 6 ) << "BUY ORDERS" << "SELL ORDERS\n"
+            << ' ' << setw( spacing + 1 ) << "Price" << setw( spacing ) << orders.quote << ' ' << setw( spacing ) 
+            << orders.base << ' ' << setw( spacing ) << sum_stream.str()  
+            << "   " << setw( spacing + 1 ) << "Price" << setw( spacing ) << orders.quote << ' ' << setw( spacing )
+            << orders.base << ' ' << setw( spacing ) << sum_stream.str()
+            << "\n====================================================================================="
+            << "|=====================================================================================\n";
+         
+         for (int i = 0; i < bids.size() || i < asks.size() ; i++)
+         {
+            if ( i < bids.size() )
+            {
+                bid_sum += bids[i].first;
+                ss << ' ' << setw( spacing );
+                prettify_num( bids[i].second );
+                ss << ' ' << setw( spacing );
+                prettify_num( bids[i].first );
+                ss << ' ' << setw( spacing ); 
+                prettify_num( bids[i].second / bids[i].first );
+                ss << ' ' << setw( spacing );
+                prettify_num( bid_sum );
+                ss << ' ';
+            }
+            else
+            {          
+                ss << setw( (spacing * 4) + 5 ) << ' ';
+            }
+            
+            ss << '|';
+            
+            if ( i < asks.size() )
+            {
+               ask_sum += asks[i].first;
+               ss << ' ' << setw( spacing );
+               prettify_num( asks[i].second );
+               ss << ' ' << setw( spacing );
+               prettify_num( asks[i].first );
+               ss << ' ' << setw( spacing ); 
+               prettify_num( asks[i].second  / asks[i].first );
+               ss << ' ' << setw( spacing ); 
+               prettify_num( ask_sum );
+            }
+            
+            ss << '\n';
+         }
+         
+         ss << endl
+            << "Buy Total:  " << bid_sum << ' ' << orders.base << endl
+            << "Sell Total: " << ask_sum << ' ' << orders.base << endl;
+         
+         return ss.str();
+      };
 
       return m;
    }
@@ -3496,6 +3579,28 @@ signed_transaction wallet_api::sell_asset(string seller_account,
                          symbol_to_receive, expiration, fill_or_kill, broadcast);
 }
 
+signed_transaction wallet_api::sell( string seller_account,
+                                     string base,
+                                     string quote,
+                                     double rate,
+                                     double amount,
+                                     bool broadcast )
+{
+   return my->sell_asset( seller_account, std::to_string( amount ), base, 
+                          std::to_string( rate * amount ), quote, 0, false, broadcast );
+}
+
+signed_transaction wallet_api::buy( string buyer_account,
+                                    string base,
+                                    string quote,
+                                    double rate,
+                                    double amount,
+                                    bool broadcast )
+{
+   return my->sell_asset( buyer_account, std::to_string( rate * amount ), quote,
+                          std::to_string( amount ), base, 0, false, broadcast );
+}
+
 signed_transaction wallet_api::borrow_asset(string seller_name, string amount_to_sell,
                                                 string asset_symbol, string amount_of_collateral, bool broadcast)
 {
@@ -4021,6 +4126,11 @@ vector<blind_receipt> wallet_api::blind_history( string key_or_account )
    }
    std::sort( result.begin(), result.end(), [&]( const blind_receipt& a, const blind_receipt& b ){ return a.date > b.date; } );
    return result;
+}
+
+order_book wallet_api::get_order_book( const string& base, const string& quote, unsigned limit )
+{
+   return( my->_remote_db->get_order_book( base, quote, limit ) );
 }
 
 signed_block_with_info::signed_block_with_info( const signed_block& block )

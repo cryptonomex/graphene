@@ -465,9 +465,9 @@ bool database::check_call_orders(const asset_object& mia, bool enable_black_swan
 
        if( feed_protected )
        {
-          ilog( "Feed protected margin call executing (HARDFORK_436_TIME not here yet)" );
-          idump( (*call_itr) );
-          idump( (*limit_itr) );
+          //log( "Feed protected margin call executing (HARDFORK_436_TIME not here yet)" );
+          //idump( (*call_itr) );
+          //idump( (*limit_itr) );
        }
 
      //  idump((*call_itr));

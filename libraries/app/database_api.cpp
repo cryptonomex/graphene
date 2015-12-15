@@ -889,7 +889,7 @@ vector<limit_order_object> database_api::get_limit_orders(asset_id_type a, asset
  *  @return the limit orders for both sides of the book for the two assets specified up to limit number on each side.
  */
 vector<limit_order_object> database_api_impl::get_limit_orders(asset_id_type a, asset_id_type b, uint32_t limit)const
-{
+{ 
    const auto& limit_order_idx = _db.get_index_type<limit_order_index>();
    const auto& limit_price_idx = limit_order_idx.indices().get<by_price>();
 
@@ -1019,6 +1019,8 @@ order_book database_api::get_order_book( const string& base, const string& quote
 
 order_book database_api_impl::get_order_book( const string& base, const string& quote, unsigned limit )const
 {
+   FC_ASSERT( limit <= 50 );
+      
    order_book result;
    result.base = base;
    result.quote = quote;
@@ -1032,21 +1034,21 @@ order_book database_api_impl::get_order_book( const string& base, const string& 
    auto orders = get_limit_orders( base_id, quote_id, limit );
 
 
-   auto asset_to_real = [&]( const asset& a, int p ) { return double(a.amount.value)/pow( p, 10 ); };
+   auto asset_to_real = [&]( const asset& a, int p ) { return double(a.amount.value)/pow( 10, p ); };
    auto price_to_real = [&]( const price& p ) {
       if( p.base.asset_id == base_id )
          return asset_to_real( p.base, assets[0]->precision ) / asset_to_real( p.quote, assets[1]->precision );
       else
-         return asset_to_real( p.quote, assets[1]->precision ) / asset_to_real( p.base, assets[0]->precision );
+         return asset_to_real( p.quote, assets[0]->precision ) / asset_to_real( p.base, assets[1]->precision );
    };
 
    for( const auto& o : orders ) {
       if( o.sell_price.base.asset_id == base_id ) {
-          result.bids.push_back( std::make_pair(price_to_real(o.sell_price), 
-                                                asset_to_real(o.amount_for_sale(), assets[0]->precision)) );
+          result.bids.push_back( std::make_pair( price_to_real(o.sell_price), 
+                                                 asset_to_real(o.sell_price.base, assets[0]->precision ) ) );
       } else {
-          result.asks.push_back( std::make_pair(price_to_real(o.sell_price), 
-                                                asset_to_real(o.amount_to_receive(), assets[0]->precision)) );
+          result.asks.push_back( std::make_pair( price_to_real(o.sell_price), 
+                                                 asset_to_real(o.sell_price.quote, assets[1]->precision)) );
       }
    }
 

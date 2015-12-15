@@ -176,8 +176,8 @@ void database::clear_expired_proposals()
             continue;
          }
       } catch( const fc::exception& e ) {
-         elog("Failed to apply proposed transaction on its expiration. Deleting it.\n${proposal}\n${error}",
-              ("proposal", proposal)("error", e.to_detail_string()));
+        // elog("Failed to apply proposed transaction on its expiration. Deleting it.\n${proposal}\n${error}",
+        //      ("proposal", proposal)("error", e.to_detail_string()));
       }
       remove(proposal);
    }
