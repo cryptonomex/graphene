@@ -54,6 +54,12 @@ namespace graphene { namespace db {
       {
          return a.number == b.number;
       }
+
+      friend bool  operator != ( const object_id_type& a, const object_id_type& b )
+      {
+         return a.number != b.number;
+      }
+
       object_id_type& operator++(int) { ++number; return *this; }
       object_id_type& operator++()    { ++number; return *this; }
 
@@ -124,6 +130,16 @@ namespace graphene { namespace db {
       {
          return a.instance != b.instance;
       }
+      friend bool  operator != ( const object_id_type& a, const object_id& b )
+      {
+         return a != object_id_type(b);
+      }
+      friend bool  operator != ( const object_id& a, const object_id_type& b )
+      {
+         return object_id_type(a) != b;
+      }
+
+
       friend bool  operator == ( const object_id& a, const object_id& b )
       {
          return a.instance == b.instance;
