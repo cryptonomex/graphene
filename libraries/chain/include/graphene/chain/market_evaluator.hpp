@@ -64,9 +64,13 @@ namespace graphene { namespace chain {
   typedef multi_index_container<
      limit_order_object,
      indexed_by<
-        ordered_unique< tag<by_id>,
-           member< object, object_id_type, &object::id > >,
-        ordered_non_unique< tag<by_expiration>, member< limit_order_object, time_point_sec, &limit_order_object::expiration> >,
+        ordered_unique< tag<by_id>, member< object, object_id_type, &object::id > >,
+        ordered_unique< tag<by_expiration>,
+           composite_key< limit_order_object,
+              member< limit_order_object, time_point_sec, &limit_order_object::expiration>,
+              member< object, object_id_type, &object::id>
+           >
+        >,
         ordered_unique< tag<by_price>,
            composite_key< limit_order_object,
               member< limit_order_object, price, &limit_order_object::sell_price>,
@@ -74,7 +78,12 @@ namespace graphene { namespace chain {
            >,
            composite_key_compare< std::greater<price>, std::less<object_id_type> >
         >,
-        ordered_non_unique< tag<by_account>, member<limit_order_object, account_id_type, &limit_order_object::seller>>
+        ordered_unique< tag<by_account>,
+           composite_key< limit_order_object,
+              member<limit_order_object, account_id_type, &limit_order_object::seller>,
+              member<object, object_id_type, &object::id>
+           >
+        >
      >
   > limit_order_multi_index_type;
 
@@ -160,13 +169,17 @@ namespace graphene { namespace chain {
       force_settlement_object,
       indexed_by<
          ordered_unique< tag<by_id>, member< object, object_id_type, &object::id > >,
-         ordered_non_unique< tag<by_account>,
-            member<force_settlement_object, account_id_type, &force_settlement_object::owner>
+         ordered_unique< tag<by_account>,
+            composite_key< force_settlement_object,
+               member<force_settlement_object, account_id_type, &force_settlement_object::owner>,
+               member< object, object_id_type, &object::id >
+            >
          >,
-         ordered_non_unique< tag<by_expiration>,
+         ordered_unique< tag<by_expiration>,
             composite_key< force_settlement_object,
                const_mem_fun<force_settlement_object, asset_id_type, &force_settlement_object::settlement_asset_id>,
-               member<force_settlement_object, time_point_sec, &force_settlement_object::settlement_date>
+               member<force_settlement_object, time_point_sec, &force_settlement_object::settlement_date>,
+               member< object, object_id_type, &object::id >
             >
          >
       >
