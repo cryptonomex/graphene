@@ -38,6 +38,8 @@
 #include <graphene/chain/witness_object.hpp>
 #include <graphene/chain/confidential_evaluator.hpp>
 
+#include <graphene/market_history/market_history_plugin.hpp>
+
 #include <fc/api.hpp>
 #include <fc/optional.hpp>
 #include <fc/variant_object.hpp>
@@ -54,6 +56,7 @@
 namespace graphene { namespace app {
 
 using namespace graphene::chain;
+using namespace graphene::market_history;
 using namespace std;
 
 class database_api_impl;
@@ -416,7 +419,7 @@ class database_api
        * @param start Start time as a UNIX timestamp
        * @return Recent transactions in the market
        */
-      vector<operation_history_object> get_trade_history( const string& base, const string& quote, uint32_t stop = 0, unsigned limit = 100, uint32_t start = 0 )const;
+      vector<order_history_object> get_trade_history( const string& base, const string& quote, fc::time_point_sec stop = fc::time_point_sec(0), unsigned limit = 100, fc::time_point_sec start = fc::time_point_sec(0) )const;
       
       /**
        * @brief Returns chart data

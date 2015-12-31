@@ -99,7 +99,7 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
       market_ticker                      get_ticker( const string& base, const string& quote )const;
       market_volume                      get_24_volume( const string& base, const string& quote )const;
       order_book                         get_order_book( const string& base, const string& quote, unsigned limit = 50 )const;
-      vector<operation_history_object>   get_trade_history( const string& base, const string& quote, uint32_t stop, unsigned limit, uint32_t start )const;
+      vector<order_history_object>   get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const;
       vector<candlestick_data>           get_chart_data( const string& asset, uint32_t start, uint32_t stop, candlestick_period period)const;
       vector<loan_order>                 get_loan_orders( const string& asset )const;
 
@@ -999,7 +999,58 @@ market_ticker database_api::get_ticker( const string& base, const string& quote 
 
 market_ticker database_api_impl::get_ticker( const string& base, const string& quote )const
 {
-   FC_ASSERT( false, "database_api::get_ticker --- NYI" );
+   auto assets = lookup_asset_symbols( {base, quote} );
+   FC_ASSERT( assets[0], "Invalid base asset symbol: ${s}", ("s",base) );
+   FC_ASSERT( assets[1], "Invalid quote asset symbol: ${s}", ("s",quote) );
+   
+   auto base_id = assets[0]->id;
+   auto quote_id = assets[1]->id;
+
+   market_ticker result;
+
+   result.base = quote;
+   result.quote = base;
+   result.base_volume = 0;
+   result.quote_volume = 0;
+   result.percent_change = 0;
+   result.lowest_ask = 0;
+   result.highest_bid = 0;
+
+   try {
+      if( base_id > quote_id ) std::swap(base_id, quote_id);
+
+      const auto& bidx = _db.get_index_type<bucket_index>();
+      const auto& by_key_idx = bidx.indices().get<by_key>();
+      uint32_t bucket_size = 86400;
+      auto now = fc::time_point_sec( fc::time_point::now() );
+
+      auto itr = by_key_idx.lower_bound( bucket_key( base_id, quote_id, bucket_size, 
+      fc::time_point() + fc::seconds( ( now.sec_since_epoch() / bucket_size ) * bucket_size ) ) );
+
+      if( itr != by_key_idx.end() && itr->key.base == base_id && itr->key.quote == quote_id && itr->key.seconds == bucket_size )
+      {
+         if (assets[0]->id == base_id)
+         {
+            result.base_volume = (double) itr->base_volume.value;
+            result.quote_volume = (double) itr->quote_volume.value;
+            result.percent_change = ( (double) itr->open_base.value / (double) itr->open_quote.value )
+                                    / ( (double) itr->close_base.value / (double) itr->close_quote.value ) - 1;
+            result.lowest_ask = (double) itr->low_base.value / (double) itr->low_quote.value;
+            result.highest_bid = (double) itr->high_base.value / (double) itr->high_quote.value;
+         }
+         else
+         {
+            result.base_volume = (double) itr->quote_volume.value;
+            result.quote_volume = (double) itr->base_volume.value;
+            result.percent_change = ( (double) itr->open_quote.value / (double) itr->open_base.value )
+                                    / ( (double) itr->close_quote.value / (double) itr->close_base.value ) - 1;
+            result.lowest_ask = (double) itr->low_quote.value / (double) itr->low_base.value;
+            result.highest_bid = (double) itr->high_quote.value / (double) itr->high_base.value;
+         }
+      }
+      
+      return result;
+   } FC_CAPTURE_AND_RETHROW( (base)(quote) )
 }
 
 market_volume database_api::get_24_volume( const string& base, const string& quote )const
@@ -1009,7 +1060,45 @@ market_volume database_api::get_24_volume( const string& base, const string& quo
 
 market_volume database_api_impl::get_24_volume( const string& base, const string& quote )const
 {
-   FC_ASSERT( false, "database_api::get_24_volume --- NYI" );
+   auto assets = lookup_asset_symbols( {base, quote} );
+   FC_ASSERT( assets[0], "Invalid base asset symbol: ${s}", ("s",base) );
+   FC_ASSERT( assets[1], "Invalid quote asset symbol: ${s}", ("s",quote) );
+   
+   auto base_id = assets[0]->id;
+   auto quote_id = assets[1]->id;
+   
+   market_volume result;
+   result.base = base;
+   result.quote = quote;
+   result.base_volume = 0;
+   result.quote_volume = 0;
+   
+   try {
+      if( base_id > quote_id ) std::swap(base_id, quote_id);
+      
+      const auto& bidx = _db.get_index_type<bucket_index>();
+      const auto& by_key_idx = bidx.indices().get<by_key>();
+      uint32_t bucket_size = 86400;
+      auto now = fc::time_point_sec( fc::time_point::now() );
+      
+      auto itr = by_key_idx.lower_bound( bucket_key( base_id, quote_id, bucket_size, now - bucket_size ) );
+      
+      if ( itr != by_key_idx.end() && itr->key.base == base_id && itr->key.quote == quote_id && itr->key.seconds == bucket_size )
+      {
+         if ( assets[0]->id == base_id)
+         {
+            result.base_volume = (double) itr->base_volume.value;
+            result.quote_volume = (double) itr->quote_volume.value;
+         }
+         else
+         {
+            result.base_volume = (double) itr->quote_volume.value;
+            result.quote_volume = (double) itr->base_volume.value;
+         }
+      }
+      
+      return result;
+   } FC_CAPTURE_AND_RETHROW( (base)(quote) ) 
 }
 
 order_book database_api::get_order_book( const string& base, const string& quote, unsigned limit )const
@@ -1025,7 +1114,7 @@ order_book database_api_impl::get_order_book( const string& base, const string& 
    result.base = base;
    result.quote = quote;
 
-   auto assets = lookup_asset_symbols( {base,quote} );
+   auto assets = lookup_asset_symbols( {base, quote} );
    FC_ASSERT( assets[0], "Invalid base asset symbol: ${s}", ("s",base) );
    FC_ASSERT( assets[1], "Invalid quote asset symbol: ${s}", ("s",quote) );
 
@@ -1055,14 +1144,39 @@ order_book database_api_impl::get_order_book( const string& base, const string& 
    return result;
 }
 
-vector<operation_history_object> database_api::get_trade_history( const string& base, const string& quote, uint32_t stop, unsigned limit, uint32_t start )const
+vector<order_history_object> database_api::get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const
 {
    return my->get_trade_history( base, quote, stop, limit, start );
 }
 
-vector<operation_history_object> database_api_impl::get_trade_history( const string& base, const string& quote, uint32_t stop, unsigned limit, uint32_t start )const
+vector<order_history_object> database_api_impl::get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const
 {
    FC_ASSERT( false, "database_api::get_trade_history --- NYI" );
+   /*
+   auto assets = lookup_asset_symbols( {base, quote} );
+   auto base_id = assets[0]->id;
+   auto quote_id = assets[1]->id;
+   
+   if( base_id > quote_id ) std::swap( base_id, quote_id );
+   const auto& history_idx = _db.get_index_type<graphene::market_history::history_index>().indices().get<by_key>();
+   history_key hkey;
+   hkey.base = base_id;
+   hkey.quote = quote_id;
+   hkey.sequence = std::numeric_limits<int64_t>::min();
+
+   uint32_t count = 0;
+   auto itr = history_idx.lower_bound( hkey );
+   vector<order_history_object> result;
+   while( itr != history_idx.end() && count < limit)
+   {
+      if( itr->key.base != base_id || itr->key.quote != quote_id ) break;
+      result.push_back( *itr );
+      ++itr;
+      ++count;
+   }
+
+   return result;
+   //*/
 }
 
 vector<candlestick_data> database_api::get_chart_data( const string& asset, uint32_t start, uint32_t stop, candlestick_period period)const
