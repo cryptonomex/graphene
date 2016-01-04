@@ -89,6 +89,14 @@ struct market_volume
    double                       quote_volume;
 };
 
+struct market_trade
+{
+   fc::time_point_sec           date;
+   double                       rate;
+   double                       amount;
+   double                       total;
+};
+
 struct candlestick_data
 {
    uint32_t                     date;
@@ -419,7 +427,7 @@ class database_api
        * @param start Start time as a UNIX timestamp
        * @return Recent transactions in the market
        */
-      vector<order_history_object> get_trade_history( const string& base, const string& quote, fc::time_point_sec stop = fc::time_point_sec(0), unsigned limit = 100, fc::time_point_sec start = fc::time_point_sec(0) )const;
+      vector<market_trade> get_trade_history( const string& base, const string& quote, fc::time_point_sec stop = fc::time_point_sec(0), unsigned limit = 100, fc::time_point_sec start = fc::time_point_sec(0) )const;
       
       /**
        * @brief Returns chart data
@@ -588,6 +596,7 @@ class database_api
 FC_REFLECT( graphene::app::order_book, (base)(quote)(bids)(asks) );
 FC_REFLECT( graphene::app::market_ticker, (base)(quote)(last)(lowest_ask)(highest_bid)(percent_change)(base_volume)(quote_volume) );
 FC_REFLECT( graphene::app::market_volume, (base)(quote)(base_volume)(quote_volume) );
+FC_REFLECT( graphene::app::market_trade, (date)(rate)(amount)(total) );
 FC_REFLECT( graphene::app::candlestick_data, (date)(high)(low)(open)(close)(volume)(quote_volume)(weighted_average) );
 FC_REFLECT( graphene::app::loan_order, (asset)(rate)(ammount)(range_min)(range_max) );
 FC_REFLECT_ENUM( graphene::app::candlestick_period, (FIVE_MIN)(FIFTEEN_MIN)(THIRTY_MIN)(TWO_HOUR)(FOUR_HOUR)(ONE_DAY) );

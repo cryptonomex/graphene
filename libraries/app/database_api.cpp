@@ -99,7 +99,7 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
       market_ticker                      get_ticker( const string& base, const string& quote )const;
       market_volume                      get_24_volume( const string& base, const string& quote )const;
       order_book                         get_order_book( const string& base, const string& quote, unsigned limit = 50 )const;
-      vector<order_history_object>   get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const;
+      vector<market_trade>               get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const;
       vector<candlestick_data>           get_chart_data( const string& asset, uint32_t start, uint32_t stop, candlestick_period period)const;
       vector<loan_order>                 get_loan_orders( const string& asset )const;
 
@@ -1029,14 +1029,17 @@ market_ticker database_api_impl::get_ticker( const string& base, const string& q
 
       if( itr != by_key_idx.end() && itr->key.base == base_id && itr->key.quote == quote_id && itr->key.seconds == bucket_size )
       {
+         auto& last = get_trade_history( base, quote, fc::time_point_sec( 0 ), 1, now )[0];
+         
          if (assets[0]->id == base_id)
-         {
+         {  
             result.base_volume = (double) itr->base_volume.value;
             result.quote_volume = (double) itr->quote_volume.value;
             result.percent_change = ( (double) itr->open_base.value / (double) itr->open_quote.value )
                                     / ( (double) itr->close_base.value / (double) itr->close_quote.value ) - 1;
             result.lowest_ask = (double) itr->low_base.value / (double) itr->low_quote.value;
             result.highest_bid = (double) itr->high_base.value / (double) itr->high_quote.value;
+            result.last = last.rate;
          }
          else
          {
@@ -1046,6 +1049,7 @@ market_ticker database_api_impl::get_ticker( const string& base, const string& q
                                     / ( (double) itr->close_quote.value / (double) itr->close_base.value ) - 1;
             result.lowest_ask = (double) itr->low_quote.value / (double) itr->low_base.value;
             result.highest_bid = (double) itr->high_quote.value / (double) itr->high_base.value;
+            result.last = 1.0 / last.rate;
          }
       }
       
@@ -1144,16 +1148,19 @@ order_book database_api_impl::get_order_book( const string& base, const string& 
    return result;
 }
 
-vector<order_history_object> database_api::get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const
+vector<market_trade> database_api::get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const
 {
    return my->get_trade_history( base, quote, stop, limit, start );
 }
 
-vector<order_history_object> database_api_impl::get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const
+vector<market_trade> database_api_impl::get_trade_history( const string& base, const string& quote, fc::time_point_sec stop, unsigned limit, fc::time_point_sec start )const
 {
-   FC_ASSERT( false, "database_api::get_trade_history --- NYI" );
-   /*
+   //FC_ASSERT( false, "database_api::get_trade_history --- NYI" );
+   //*
    auto assets = lookup_asset_symbols( {base, quote} );
+   FC_ASSERT( assets[0], "Invalid base asset symbol: ${s}", ("s",base) );
+   FC_ASSERT( assets[1], "Invalid quote asset symbol: ${s}", ("s",quote) );
+   
    auto base_id = assets[0]->id;
    auto quote_id = assets[1]->id;
    
@@ -1163,16 +1170,44 @@ vector<order_history_object> database_api_impl::get_trade_history( const string&
    hkey.base = base_id;
    hkey.quote = quote_id;
    hkey.sequence = std::numeric_limits<int64_t>::min();
+   
+   auto price_to_real = [&]( const int a, int p ) { return double( a ) / pow( 10, p ); };
+   
+   if ( start.sec_since_epoch() == 0 )
+      start = fc::time_point_sec( fc::time_point::now() );
 
    uint32_t count = 0;
    auto itr = history_idx.lower_bound( hkey );
-   vector<order_history_object> result;
+   vector<market_trade> result;
+   
    while( itr != history_idx.end() && count < limit)
    {
-      if( itr->key.base != base_id || itr->key.quote != quote_id ) break;
-      result.push_back( *itr );
+      if( itr->key.base != base_id || itr->key.quote != quote_id || itr->time < stop ) break;
+      
+      if( itr->time <= start )
+      {
+         market_trade trade;// = new market_trade();
+         
+         if( base_id == assets[0]->id)
+         {
+            trade.date = itr->time;
+            trade.amount = price_to_real( itr->op.pays.amount.value, assets[0]->precision );
+            trade.total = price_to_real( itr->op.receives.amount.value, assets[1]->precision );
+            trade.rate = trade.amount / trade.total; 
+         }
+         else
+         {
+            trade.date = itr->time;
+            trade.amount = price_to_real( itr->op.receives.amount.value, assets[0]->precision );
+            trade.total = price_to_real( itr->op.pays.amount.value, assets[1]->precision );
+            trade.rate = trade.total / trade.amount;
+         }
+         
+         result.push_back( trade );
+         ++count;
+      }
+      
       ++itr;
-      ++count;
    }
 
    return result;
