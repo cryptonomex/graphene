@@ -70,7 +70,8 @@ namespace graphene { namespace chain {
             skip_merkle_check           = 1 << 7,  ///< used while reindexing
             skip_assert_evaluation      = 1 << 8,  ///< used while reindexing
             skip_undo_history_check     = 1 << 9,  ///< used while reindexing
-            skip_witness_schedule_check = 1 << 10  ///< used whiel reindexing
+            skip_witness_schedule_check = 1 << 10,  ///< used while reindexing
+            skip_validate               = 1 << 11 ///< used prior to checkpoint, skips validate() call on transaction
          };
 
          /**
@@ -163,7 +164,7 @@ namespace graphene { namespace chain {
           */
          uint32_t  push_applied_operation( const operation& op );
          void      set_applied_operation_result( uint32_t op_id, const operation_result& r );
-         const vector<operation_history_object>& get_applied_operations()const;
+         const vector<optional< operation_history_object > >& get_applied_operations()const;
 
          string to_pretty_string( const asset& a )const;
 
@@ -472,7 +473,7 @@ namespace graphene { namespace chain {
           * order they occur and is cleared after the applied_block signal is
           * emited.
           */
-         vector<operation_history_object>  _applied_ops;
+         vector<optional<operation_history_object> >  _applied_ops;
 
          uint32_t                          _current_block_num    = 0;
          uint16_t                          _current_trx_in_block = 0;

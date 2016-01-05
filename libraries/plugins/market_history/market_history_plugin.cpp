@@ -151,8 +151,8 @@ struct operation_process_fill_order
             /* const auto& obj = */
             db.create<bucket_object>( [&]( bucket_object& b ){
                  b.key = key;
-                 b.quote_volume += trade_price.quote.amount;
-                 b.base_volume += trade_price.base.amount;
+                 b.quote_volume = trade_price.quote.amount;
+                 b.base_volume = trade_price.base.amount;
                  b.open_base = trade_price.base.amount;
                  b.open_quote = trade_price.quote.amount;
                  b.close_base = trade_price.base.amount;
@@ -216,9 +216,12 @@ void market_history_plugin_impl::update_market_histories( const signed_block& b 
    if( _tracked_buckets.size() == 0 ) return;
 
    graphene::chain::database& db = database();
-   const vector<operation_history_object>& hist = db.get_applied_operations();
-   for( auto op : hist )
-      op.op.visit( operation_process_fill_order( _self, b.timestamp ) );
+   const vector<optional< operation_history_object > >& hist = db.get_applied_operations();
+   for( const optional< operation_history_object >& o_op : hist )
+   {
+      if( o_op.valid() )
+         o_op->op.visit( operation_process_fill_order( _self, b.timestamp ) );
+   }
 }
 
 } // end namespace detail

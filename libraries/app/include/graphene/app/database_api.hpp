@@ -73,7 +73,7 @@ struct market_ticker
 {
    string                       base;
    string                       quote;
-   double                       last;
+   double                       latest;
    double                       lowest_ask;
    double                       highest_bid;
    double                       percent_change;
@@ -92,9 +92,9 @@ struct market_volume
 struct market_trade
 {
    fc::time_point_sec           date;
-   double                       rate;
+   double                       price;
    double                       amount;
-   double                       total;
+   double                       value;
 };
 
 struct candlestick_data
@@ -594,9 +594,9 @@ class database_api
 
 } }
 FC_REFLECT( graphene::app::order_book, (base)(quote)(bids)(asks) );
-FC_REFLECT( graphene::app::market_ticker, (base)(quote)(last)(lowest_ask)(highest_bid)(percent_change)(base_volume)(quote_volume) );
+FC_REFLECT( graphene::app::market_ticker, (base)(quote)(latest)(lowest_ask)(highest_bid)(percent_change)(base_volume)(quote_volume) );
 FC_REFLECT( graphene::app::market_volume, (base)(quote)(base_volume)(quote_volume) );
-FC_REFLECT( graphene::app::market_trade, (date)(rate)(amount)(total) );
+FC_REFLECT( graphene::app::market_trade, (date)(price)(amount)(value) );
 FC_REFLECT( graphene::app::candlestick_data, (date)(high)(low)(open)(close)(volume)(quote_volume)(weighted_average) );
 FC_REFLECT( graphene::app::loan_order, (asset)(rate)(ammount)(range_min)(range_max) );
 FC_REFLECT_ENUM( graphene::app::candlestick_period, (FIVE_MIN)(FIFTEEN_MIN)(THIRTY_MIN)(TWO_HOUR)(FOUR_HOUR)(ONE_DAY) );
