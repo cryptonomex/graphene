@@ -97,37 +97,6 @@ struct market_trade
    double                       value;
 };
 
-struct candlestick_data
-{
-   uint32_t                     date;
-   double                       high;
-   double                       low;
-   double                       open;
-   double                       close;
-   double                       volume;
-   double                       quote_volume;
-   double                       weighted_average;
-};
-
-struct loan_order
-{
-   string                       asset;
-   double                       rate;
-   double                       ammount;
-   uint16_t                     range_min;
-   uint16_t                     range_max;
-};
-
-enum candlestick_period
-{
-   FIVE_MIN,
-   FIFTEEN_MIN,
-   THIRTY_MIN,
-   TWO_HOUR,
-   FOUR_HOUR,
-   ONE_DAY
-};
-
 /**
  * @brief The database_api class implements the RPC API for the chain database.
  *
@@ -420,6 +389,7 @@ class database_api
       
       /**
        * @brief Returns recent trades for the market assetA:assetB
+       * Note: Currentlt, timezone offsets are not supported. The time must be UTC.
        * @param a String name of the first asset
        * @param b String name of the second asset
        * @param stop Stop time as a UNIX timestamp
@@ -427,20 +397,7 @@ class database_api
        * @param start Start time as a UNIX timestamp
        * @return Recent transactions in the market
        */
-      vector<market_trade> get_trade_history( const string& base, const string& quote, fc::time_point_sec stop = fc::time_point_sec(0), unsigned limit = 100, fc::time_point_sec start = fc::time_point_sec(0) )const;
-      
-      /**
-       * @brief Returns chart data
-       * TODO: Define what the parameters of this should be to limit abuse.
-       */
-      vector<candlestick_data> get_chart_data( const string& asset, uint32_t start, uint32_t stop, candlestick_period period)const;
-      
-      //TODO: Return currencies same info as get_objects for an asset? Should we combine multiple API calls into this single call?
-      
-      /**
-       * @brief
-       */
-      vector<loan_order> get_loan_orders( const string& asset )const;
+      vector<market_trade> get_trade_history( const string& base, const string& quote, fc::time_point_sec start, fc::time_point_sec stop, unsigned limit = 100 )const;
       
       
 
@@ -597,9 +554,6 @@ FC_REFLECT( graphene::app::order_book, (base)(quote)(bids)(asks) );
 FC_REFLECT( graphene::app::market_ticker, (base)(quote)(latest)(lowest_ask)(highest_bid)(percent_change)(base_volume)(quote_volume) );
 FC_REFLECT( graphene::app::market_volume, (base)(quote)(base_volume)(quote_volume) );
 FC_REFLECT( graphene::app::market_trade, (date)(price)(amount)(value) );
-FC_REFLECT( graphene::app::candlestick_data, (date)(high)(low)(open)(close)(volume)(quote_volume)(weighted_average) );
-FC_REFLECT( graphene::app::loan_order, (asset)(rate)(ammount)(range_min)(range_max) );
-FC_REFLECT_ENUM( graphene::app::candlestick_period, (FIVE_MIN)(FIFTEEN_MIN)(THIRTY_MIN)(TWO_HOUR)(FOUR_HOUR)(ONE_DAY) );
 
 FC_API(graphene::app::database_api,
    // Objects
@@ -659,8 +613,6 @@ FC_API(graphene::app::database_api,
    (get_ticker)
    (get_24_volume)
    (get_trade_history)
-   (get_chart_data)
-   (get_loan_orders)
 
    // Witnesses
    (get_witnesses)
