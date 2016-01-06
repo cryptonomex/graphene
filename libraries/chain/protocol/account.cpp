@@ -172,6 +172,15 @@ share_type account_create_operation::calculate_fee( const fee_parameters_type& k
    return core_fee_required;
 }
 
+struct account_create_operation_options_ext_validate_visitor
+{
+   void operator()( const void_t& e ) {}
+
+   void operator()( const account_options::ext::vote_committee_size& e )
+   {
+      FC_ASSERT( false );
+   }
+};
 
 void account_create_operation::validate()const
 {
@@ -185,10 +194,14 @@ void account_create_operation::validate()const
    FC_ASSERT( !owner.is_impossible(), "cannot create an account with an imposible owner authority threshold" );
    FC_ASSERT( !active.is_impossible(), "cannot create an account with an imposible active authority threshold" );
    options.validate();
+
+   if( options.extensions.size() > 0 )
+   {
+      account_create_operation_options_ext_validate_visitor vtor;
+      for( const account_options::future_extensions& e : options.extensions )
+         e.visit( vtor );
+   }
 }
-
-
-
 
 share_type account_update_operation::calculate_fee( const fee_parameters_type& k )const
 {
@@ -197,6 +210,44 @@ share_type account_update_operation::calculate_fee( const fee_parameters_type& k
       core_fee_required += calculate_data_fee( fc::raw::pack_size(*this), k.price_per_kbyte );
    return core_fee_required;
 }
+
+struct account_update_operation_options_ext_validate_visitor
+{
+   void operator()( const void_t& e ) {}
+
+   void operator()( const account_options::ext::vote_committee_size& e )
+   {
+      // TODO:  Validation
+   }
+};
+
+struct account_update_operation_ext_validate_visitor
+{
+   void operator()( const void_t& e ) {}
+
+   void operator()( const account_update_operation::ext::create_committee& e )
+   {
+      FC_ASSERT( e.min_committee_size > 0 );
+      FC_ASSERT( e.max_committee_size > 0 );
+      FC_ASSERT( e.min_committee_size <= e.max_committee_size );
+   }
+
+   void operator()( const account_update_operation::ext::update_committee& e )
+   {
+      if( e.min_committee_size.valid() )
+      {
+         FC_ASSERT( *(e.min_committee_size) > 0 );
+      }
+      if( e.max_committee_size.valid() )
+      {
+         FC_ASSERT( e.max_committee_size > 0 );
+      }
+      if( e.min_committee_size.valid() && e.max_committee_size.valid() )
+      {
+         FC_ASSERT( *(e.min_committee_size) <= *(e.max_committee_size) );
+      }
+   }
+};
 
 void account_update_operation::validate()const
 {
@@ -218,7 +269,24 @@ void account_update_operation::validate()const
    }
 
    if( new_options )
+   {
       new_options->validate();
+      if( new_options->extensions.size() > 0 )
+      {
+         account_update_operation_options_ext_validate_visitor vtor;
+         for( const account_options::future_extensions& e : new_options->extensions )
+            e.visit( vtor );
+      }
+   }
+
+   if( extensions.size() > 0 )
+   {
+      account_operation_ext_validate_visitor vtor;
+      for( const future_extensions& e : extensions )
+      {
+         e.visit( vtor );
+      }
+   }
 }
 
 

@@ -47,6 +47,30 @@ object_id_type committee_member_create_evaluator::do_apply( const committee_memb
          obj.committee_member_account   = op.committee_member_account;
          obj.vote_id            = vote_id;
          obj.url                = op.url;
+         obj.committee          = GRAPHENE_CORE_COMMITTEE;
+   });
+   return new_del_object.id;
+} FC_CAPTURE_AND_RETHROW( (op) ) }
+
+void_result committee_member_create2_evaluator::do_evaluate( const committee_member_create2_operation& op )
+{ try {
+   FC_ASSERT(db().get(op.committee_member_account).is_lifetime_member());
+   db().get(op.committee);
+   return void_result();
+} FC_CAPTURE_AND_RETHROW( (op) ) }
+
+object_id_type committee_member_create2_evaluator::do_apply( const committee_member_create2_operation& op )
+{ try {
+   vote_id_type vote_id;
+   db().modify(db().get_global_properties(), [&vote_id](global_property_object& p) {
+      vote_id = get_next_vote_id(p, vote_id_type::committee);
+   });
+
+   const auto& new_del_object = db().create<committee_member_object>( [&]( committee_member_object& obj ){
+         obj.committee_member_account   = op.committee_member_account;
+         obj.vote_id            = vote_id;
+         obj.url                = op.url;
+         obj.committee          = op.committee;
    });
    return new_del_object.id;
 } FC_CAPTURE_AND_RETHROW( (op) ) }

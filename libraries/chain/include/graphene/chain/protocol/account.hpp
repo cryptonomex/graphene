@@ -22,14 +22,25 @@
 #include <graphene/chain/protocol/base.hpp>
 #include <graphene/chain/protocol/vote.hpp>
 
-namespace graphene { namespace chain { 
+namespace graphene { namespace chain {
 
    bool is_valid_name( const string& s );
    bool is_cheap_name( const string& n );
 
    /// These are the fields which can be updated by the active authority.
-   struct account_options 
+   struct account_options
    {
+      // TODO C++ could this be a namespace instead of a struct?
+      struct ext
+      {
+         struct vote_committee_size
+         {
+            flat_map< committee_id_type, uint16_t >  committee_size;
+         };
+      };
+      typedef static_variant< void_t, ext::vote_committee_size > future_extensions;
+      typedef flat_set< future_extensions >                      extensions_type;
+
       /// The memo key is the key this account will typically use to encrypt/sign transaction memos and other non-
       /// validated account activities. This field is here to prevent confusion if the active authority has zero or
       /// multiple keys in it.
@@ -58,9 +69,9 @@ namespace graphene { namespace chain {
     */
    struct account_create_operation : public base_operation
    {
-      struct fee_parameters_type { 
+      struct fee_parameters_type {
          uint64_t basic_fee      = 5*GRAPHENE_BLOCKCHAIN_PRECISION; ///< the cost to register the cheapest non-free account
-         uint64_t premium_fee    = 2000*GRAPHENE_BLOCKCHAIN_PRECISION; ///< the cost to register the cheapest non-free account
+         uint64_t premium_fee    = 2000*GRAPHENE_BLOCKCHAIN_PRECISION; ///< the cost to register a premium account
          uint32_t price_per_kbyte = GRAPHENE_BLOCKCHAIN_PRECISION;
       };
 
@@ -95,10 +106,34 @@ namespace graphene { namespace chain {
     */
    struct account_update_operation : public base_operation
    {
-      struct fee_parameters_type { 
-         share_type fee             = 20 * GRAPHENE_BLOCKCHAIN_PRECISION; 
+      struct fee_parameters_type {
+         share_type fee             = 20 * GRAPHENE_BLOCKCHAIN_PRECISION;
          uint32_t   price_per_kbyte = GRAPHENE_BLOCKCHAIN_PRECISION;
       };
+
+      struct ext
+      {
+         struct create_committee
+         {
+            asset_id_type        committee_asset;
+            uint16_t             min_committee_size;
+            uint16_t             max_committee_size;
+            uint32_t             review_period_seconds;
+         };
+
+         struct update_committee
+         {
+            optional< uint16_t > new_min_committee_size;
+            optional< uint16_t > new_max_committee_size;
+            optional< uint32_t > new_review_period_seconds;
+         };
+      };
+
+      typedef static_variant< void_t,
+         ext::create_committee,
+         ext::update_committee
+         > future_extensions;
+      typedef flat_set< future_extensions >       extensions_type;
 
       asset fee;
       /// The account to update
@@ -183,7 +218,7 @@ namespace graphene { namespace chain {
     */
    struct account_upgrade_operation : public base_operation
    {
-      struct fee_parameters_type { 
+      struct fee_parameters_type {
          uint64_t membership_annual_fee   =  2000 * GRAPHENE_BLOCKCHAIN_PRECISION;
          uint64_t membership_lifetime_fee = 10000 * GRAPHENE_BLOCKCHAIN_PRECISION; ///< the cost to upgrade to a lifetime member
       };
@@ -228,6 +263,9 @@ namespace graphene { namespace chain {
 
 } } // graphene::chain
 
+FC_REFLECT(graphene::chain::account_options::ext::vote_committee_size, (committee_size) )
+FC_REFLECT_TYPENAME( graphene::chain::account_options::future_extensions )
+FC_REFLECT_TYPENAME( graphene::chain::account_options::extensions_type )
 FC_REFLECT(graphene::chain::account_options, (memo_key)(voting_account)(num_witness)(num_committee)(votes)(extensions))
 FC_REFLECT_TYPENAME( graphene::chain::account_whitelist_operation::account_listing)
 FC_REFLECT_ENUM( graphene::chain::account_whitelist_operation::account_listing,
@@ -242,7 +280,22 @@ FC_REFLECT( graphene::chain::account_update_operation,
             (fee)(account)(owner)(active)(new_options)(extensions)
           )
 
-FC_REFLECT( graphene::chain::account_upgrade_operation, 
+FC_REFLECT( graphene::chain::account_update_operation::ext::create_committee,
+   (committee_asset)
+   (min_committee_size)
+   (max_committee_size)
+   (review_period_seconds)
+   )
+
+FC_REFLECT( graphene::chain::account_update_operation::ext::update_committee,
+   (new_min_committee_size)
+   (new_max_committee_size)
+   (new_review_period_seconds)
+   )
+FC_REFLECT_TYPENAME( graphene::chain::account_create_operation::future_extensions )
+FC_REFLECT_TYPENAME( graphene::chain::account_create_operation::extensions_type )
+
+FC_REFLECT( graphene::chain::account_upgrade_operation,
             (fee)(account_to_upgrade)(upgrade_to_lifetime_member)(extensions) )
 
 FC_REFLECT( graphene::chain::account_whitelist_operation, (fee)(authorizing_account)(account_to_list)(new_listing)(extensions))

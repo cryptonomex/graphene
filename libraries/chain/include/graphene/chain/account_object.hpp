@@ -201,6 +201,9 @@ namespace graphene { namespace chain {
           * Vesting balance which receives cashback_reward deposits.
           */
          optional<vesting_balance_id_type> cashback_vb;
+
+         optional<committee_id_type> committee;
+
          template<typename DB>
          const vesting_balance_object& cashback_balance(const DB& db)const
          {
@@ -337,7 +340,7 @@ FC_REFLECT_DERIVED( graphene::chain::account_object,
                     (network_fee_percentage)(lifetime_referrer_fee_percentage)(referrer_rewards_percentage)
                     (name)(owner)(active)(options)(statistics)(whitelisting_accounts)(blacklisting_accounts)
                     (whitelisting_accounts)(blacklisted_accounts)
-                    (cashback_vb) )
+                    (cashback_vb)(committee) )
 
 FC_REFLECT_DERIVED( graphene::chain::account_balance_object,
                     (graphene::db::object),

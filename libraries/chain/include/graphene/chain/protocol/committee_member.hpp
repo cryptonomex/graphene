@@ -22,7 +22,7 @@
 #include <graphene/chain/protocol/base.hpp>
 #include <graphene/chain/protocol/chain_parameters.hpp>
 
-namespace graphene { namespace chain { 
+namespace graphene { namespace chain {
 
    /**
     * @brief Create a committee_member object, as a bid to hold a committee_member seat on the network.
@@ -39,6 +39,32 @@ namespace graphene { namespace chain {
       /// The account which owns the committee_member. This account pays the fee for this operation.
       account_id_type                       committee_member_account;
       string                                url;
+
+      account_id_type fee_payer()const { return committee_member_account; }
+      void            validate()const;
+   };
+
+   /**
+    * @brief Create a committee_member object, as a bid to hold a committee_member seat on the network.
+    * @ingroup operations
+    *
+    * Accounts which wish to become committee_members may use this operation to create a committee_member object which stakeholders may
+    * vote on to approve its position as a committee_member.  This operation allows specifying the asset-weighted account (AWA) you desire
+    * to control.
+    *
+    * This op is defined to allow specifying a non-default committee_account field, which cannot be added to committee_member_create_operation
+    * because committee_member_create_operation has no extensions field.  This op also adds an extensions field.
+    */
+   struct committee_member_create2_operation : public base_operation
+   {
+      struct fee_parameters_type { uint64_t fee = 5000 * GRAPHENE_BLOCKCHAIN_PRECISION; };
+
+      asset                                 fee;
+      /// The account which owns the committee_member. This account pays the fee for this operation.
+      account_id_type                       committee_member_account;
+      string                                url;
+      account_id_type                       committee_account;
+      extensions_type                       extensions;
 
       account_id_type fee_payer()const { return committee_member_account; }
       void            validate()const;
@@ -91,13 +117,46 @@ namespace graphene { namespace chain {
    /// TODO: committee_member_resign_operation : public base_operation
 
 } } // graphene::chain
+
 FC_REFLECT( graphene::chain::committee_member_create_operation::fee_parameters_type, (fee) )
+FC_REFLECT( graphene::chain::committee_member_create2_operation::fee_parameters_type, (fee) )
 FC_REFLECT( graphene::chain::committee_member_update_operation::fee_parameters_type, (fee) )
 FC_REFLECT( graphene::chain::committee_member_update_global_parameters_operation::fee_parameters_type, (fee) )
-
+FC_REFLECT( graphene::chain::committee_create_operation::fee_parameters_type, (fee)(price_per_kbyte) )
+FC_REFLECT( graphene::chain::committee_update_operation::fee_parameters_type, (fee)(price_per_kbyte) )
 
 FC_REFLECT( graphene::chain::committee_member_create_operation,
             (fee)(committee_member_account)(url) )
+FC_REFLECT( graphene::chain::committee_member_create2_operation,
+   (fee)
+   (committee_member_account)
+   (url)
+   (committee_account)
+   (extensions)
+   )
 FC_REFLECT( graphene::chain::committee_member_update_operation,
             (fee)(committee_member)(committee_member_account)(new_url) )
 FC_REFLECT( graphene::chain::committee_member_update_global_parameters_operation, (fee)(new_parameters) );
+FC_REFLECT( graphene::chain::committee_create_operation,
+   (fee)
+   (committee)
+   (owner)
+   (naming_account)
+   (committee_asset)
+   (min_committee_size)
+   (max_committee_size)
+   (review_period_seconds)
+   (url)
+   (extensions)
+   )
+
+FC_REFLECT( graphene::chain::committee_update_operation,
+   (fee)
+   (owner)
+   (new_owner)
+   (new_min_committee_size)
+   (new_max_committee_size)
+   (new_review_period_seconds)
+   (new_url)
+   (extensions)
+   )

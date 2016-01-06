@@ -67,7 +67,7 @@ void_result account_create_evaluator::do_evaluate( const account_create_operatio
 
    uint32_t max_vote_id = global_props.next_available_vote_id;
 
-   FC_ASSERT( op.options.num_witness <= chain_params.maximum_witness_count, 
+   FC_ASSERT( op.options.num_witness <= chain_params.maximum_witness_count,
               "Voted for more witnesses than currently allowed (${c})", ("c", chain_params.maximum_witness_count) );
 
    FC_ASSERT( op.options.num_committee <= chain_params.maximum_committee_count,
@@ -160,6 +160,103 @@ object_id_type account_create_evaluator::do_apply( const account_create_operatio
 } FC_CAPTURE_AND_RETHROW((o)) }
 
 
+struct account_update_operation_ext_evaluate_visitor
+{
+   account_update_operation_ext_evaluate_visitor( const database& d, const account_update_operation& o )
+      : db(d), op(o), acct( d.get(o.acct) )
+   {}
+
+   void operator()( const void_t& e ) {}
+
+   void operator()( const account_update_operation::ext::create_committee& e )
+   {
+      // Note, it is a non-obvious property that you cannot include both create_committee
+      // and update_committee in the same operation.  The reason is that the create (update) ext checks
+      // the committee is absent (present) during the operation's evaluate, thus one of these checks will
+      // fail.
+
+      // TODO invalid before HF time
+      // TODO also invalid in proposals!!!
+
+      FC_ASSERT( !acct.committee.valid() );
+      FC_ASSERT( acct.is_lifetime_member() );
+      FC_ASSERT( e.review_period_sec <= get_global_properties().maximum_proposal_lifetime );
+      db.get( e.committee_asset );    // throw if asset doesn't exist
+   }
+
+   void operator()( const account_update_operation::ext::update_committee& e )
+   {
+      // TODO invalid before HF time
+
+      FC_ASSERT( acct.committee.valid() );
+      committee_object& c = (*account.committee)(db);
+      uint16_t new_min_size = c.min_committee_size;
+      uint16_t new_max_size = c.max_committee_size;
+      if( e.new_min_committee_size.valid() )
+         new_min_size = *(e.new_min_committee_size);
+      if( e.new_max_committee_size.valid() )
+         new_max_size = *(e.new_max_committee_size);
+      FC_ASSERT( new_min_size <= new_max_size );
+      if( e.new_review_period_sec.valid() )
+      {
+         FC_ASSERT( *(e.new_review_period_sec) <= get_global_properties().maximum_proposal_lifetime );
+      }
+   }
+
+   const database& db;
+   const account_update_operation& op;
+   const account_object& acct;
+};
+
+struct account_update_operation_options_ext_evaluate_visitor
+{
+   account_update_operation_options_ext_evaluate_visitor( const database& d, const account_update_operation& o )
+      : db(d), op(o)
+   {
+      assert( o.new_options.valid() );
+   }
+
+   void operator()( const void_t& e ) {}
+
+   void operator()( const account_options::ext::vote_committee_size& e )
+   {
+      flat_map< account_id_type, uint16_t > ca2votes;
+      const auto& committee_idx = _db.get_index_type<committee_member_index>().indices().get<by_vote_id>();
+
+      for( const vote_id_type& vote_id : o.new_options->votes )
+      {
+         if( id.type() == vote_id_type::committee )
+         {
+            auto it = committee_idx.find( id );
+            FC_ASSERT( it != committee_idx.end() );
+            auto it2 = ca2votes.find( it->committee_account );
+            if( it2 == ca2votes.end() )
+               ca2votes[it->committee_account] = 1;
+            else
+               ++(it2->second);
+         }
+      }
+
+      for( auto it=e.committee_size.begin(); it != e.committee_size.end(); ++it )
+      {
+         // can only vote for committee size that exists
+         db.get( it->first );
+         if( it->second == 0 )
+            continue;
+         auto it2 = id2votes.find( it->first );
+         // can vote for size==n only if you vote for at least n members
+         FC_ASSERT( it2 && (it2->second >= it->second) );
+      }
+
+      // TODO:  Same check with num_committee against the (legacy) default committee
+      // Or should we enforce num_committee == 0 after hardfork so wallets must use new
+      // format to vote for committee?
+   }
+
+   const database& db;
+   const account_update_operation& op;
+};
+
 void_result account_update_evaluator::do_evaluate( const account_update_operation& o )
 { try {
    database& d = db();
@@ -185,10 +282,59 @@ void_result account_update_evaluator::do_evaluate( const account_update_operatio
       {
          FC_ASSERT( id < max_vote_id );
       }
+      if( o.new_options->extensions.size() > 0 )
+      {
+         account_update_operation_options_ext_evaluate_visitor vtor;
+         for( const extensions_type& ext : o.new_options->extensions )
+         {
+            ext.visit( vtor );
+         }
+      }
    }
 
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
+
+struct account_update_operation_ext_apply_visitor
+{
+   account_update_operation_ext_apply_visitor( const database& d, const account_update_operation& o )
+      : db(d), op(o), acct( d.get(o.acct) )
+   {}
+
+   void operation()( const void_t& e ) {}
+
+   void operation()( const account_update_operation::ext::create_committee& e )
+   {
+      committee_id_type committee_id = db.create< committee_object >( [&]( committee_object& committee )
+      {
+         committee.committee_asset = e.committee_asset;
+         committee.min_committee_size = e.min_committee_size;
+         committee.max_committee_size = e.max_committee_size;
+         committee.review_period_seconds = e.review_period_seconds;
+      } ).id;
+      db.modify( acct, [&]( const account_object& a )
+      {
+         a.committee = committee_id;
+      } );
+   }
+
+   void operation()( const account_update_operation::ext::update_committee& e )
+   {
+      db.modify( (*acct.committee)(db), [&]( committee_object& c )
+      {
+         if( e.new_min_committee_size.valid() )
+            c.min_committee_size = *(e.new_min_committee_size);
+         if( e.new_max_committee_size.valid() )
+            c.max_committee_size = *(e.new_max_committee_size);
+         if( e.new_review_period_seconds.valid() )
+            c.review_period_seconds = *(e.new_max_committee_size);
+      } );
+   }
+
+   const database& db;
+   const account_update_operation& op;
+   const account_object& acct;
+};
 
 void_result account_update_evaluator::do_apply( const account_update_operation& o )
 { try {

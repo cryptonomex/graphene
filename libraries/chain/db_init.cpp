@@ -159,6 +159,7 @@ void database::initialize_evaluators()
    register_evaluator<transfer_from_blind_evaluator>();
    register_evaluator<blind_transfer_evaluator>();
    register_evaluator<asset_claim_fees_evaluator>();
+   register_evaluator<committee_member_create2_evaluator>();
 }
 
 void database::initialize_indexes()
@@ -187,6 +188,7 @@ void database::initialize_indexes()
    add_index< primary_index<worker_index> >();
    add_index< primary_index<balance_index> >();
    add_index< primary_index<blinded_balance_index> >();
+   add_index< primary_index<committee_index> >();
 
    //Implementation object indexes
    add_index< primary_index<transaction_index                             > >();
