@@ -2147,7 +2147,7 @@ public:
          auto asks = orders.asks;
          std::stringstream ss;
          std::stringstream sum_stream;
-         sum_stream << "TOTAL(" << orders.quote << ')';
+         sum_stream << "Sum(" << orders.base << ')';
          double bid_sum = 0;
          double ask_sum = 0;
          const int spacing = 20;
@@ -2165,17 +2165,17 @@ public:
             }
             else
             {
-               ss << setiosflags( ios::fixed ) << setprecision(8) << n;
+               ss << setiosflags( ios::fixed ) << setprecision(6) << n;
             }
          };
          
          ss << setprecision( 8 ) << setiosflags( ios::fixed ) << setiosflags( ios::left );
          
          ss << ' ' << setw( (spacing * 4) + 6 ) << "BUY ORDERS" << "SELL ORDERS\n"
-            << ' ' << setw( spacing + 1 ) << "PRICE" << setw( spacing ) << orders.base << ' ' << setw( spacing ) 
-            << orders.quote << ' ' << setw( spacing ) << sum_stream.str()  
-            << "   " << setw( spacing + 1 ) << "PRICE" << setw( spacing ) << orders.base << ' ' << setw( spacing )
-            << orders.quote << ' ' << setw( spacing ) << sum_stream.str()
+            << ' ' << setw( spacing + 1 ) << "Price" << setw( spacing ) << orders.quote << ' ' << setw( spacing ) 
+            << orders.base << ' ' << setw( spacing ) << sum_stream.str()  
+            << "   " << setw( spacing + 1 ) << "Price" << setw( spacing ) << orders.quote << ' ' << setw( spacing )
+            << orders.base << ' ' << setw( spacing ) << sum_stream.str()
             << "\n====================================================================================="
             << "|=====================================================================================\n";
          
@@ -2183,13 +2183,13 @@ public:
          {
             if ( i < bids.size() )
             {
-                bid_sum += bids[i].first * bids[i].second ;
-                ss << ' ' << setw( spacing );
-                prettify_num( bids[i].first);
+                bid_sum += bids[i].first;
                 ss << ' ' << setw( spacing );
                 prettify_num( bids[i].second );
+                ss << ' ' << setw( spacing );
+                prettify_num( bids[i].first );
                 ss << ' ' << setw( spacing ); 
-                prettify_num( bids[i].first * bids[i].second );
+                prettify_num( bids[i].second / bids[i].first );
                 ss << ' ' << setw( spacing );
                 prettify_num( bid_sum );
                 ss << ' ';
@@ -2203,13 +2203,13 @@ public:
             
             if ( i < asks.size() )
             {
-               ask_sum += asks[i].first * asks[i].first;
-               ss << ' ' << setw( spacing );
-               prettify_num( asks[i].first );
+               ask_sum += asks[i].first;
                ss << ' ' << setw( spacing );
                prettify_num( asks[i].second );
+               ss << ' ' << setw( spacing );
+               prettify_num( asks[i].first );
                ss << ' ' << setw( spacing ); 
-               prettify_num( asks[i].first * asks[i].second );
+               prettify_num( asks[i].second  / asks[i].first );
                ss << ' ' << setw( spacing ); 
                prettify_num( ask_sum );
             }
@@ -2218,8 +2218,8 @@ public:
          }
          
          ss << endl
-            << "Buy Total:  " << bid_sum << ' ' << orders.quote << endl
-            << "Sell Total: " << ask_sum << ' ' << orders.quote << endl;
+            << "Buy Total:  " << bid_sum << ' ' << orders.base << endl
+            << "Sell Total: " << ask_sum << ' ' << orders.base << endl;
          
          return ss.str();
       };

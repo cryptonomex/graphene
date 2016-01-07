@@ -71,24 +71,13 @@ account_history_plugin_impl::~account_history_plugin_impl()
 void account_history_plugin_impl::update_account_histories( const signed_block& b )
 {
    graphene::chain::database& db = database();
-   const vector<optional< operation_history_object > >& hist = db.get_applied_operations();
-   for( const optional< operation_history_object >& o_op : hist )
+   const vector<operation_history_object>& hist = db.get_applied_operations();
+   for( auto op : hist )
    {
       // add to the operation history index
-      const auto& oho = db.create<operation_history_object>( [&]( operation_history_object& h )
-      {
-         if( o_op.valid() )
-            h = *o_op;
-      } );
-
-      if( !o_op.valid() )
-      {
-         ilog( "removing failed operation with ID: ${id}", ("id", oho.id) );
-         db.remove( oho );
-         continue;
-      }
-
-      const operation_history_object& op = *o_op;
+      const auto& oho = db.create<operation_history_object>( [&]( operation_history_object& h ){
+                                h = op;
+                        });
 
       // get the set of accounts this operation applies to
       flat_set<account_id_type> impacted;
