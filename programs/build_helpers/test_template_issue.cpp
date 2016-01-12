@@ -20,19 +20,19 @@ struct A
    E<C> y;
 };
 
+template< typename Stream, typename T >
+void operator<<( Stream& s, const graphene::chain::E<T>& e )
+{
+   std::cout << "here!\n";
+   return;
+}
+
 } }
 
 FC_REFLECT( graphene::chain::C, (x) )
 FC_REFLECT( graphene::chain::A, (y) )
 
 namespace fc { namespace raw {
-
-template< typename Stream, typename T >
-void pack( Stream& s, const graphene::chain::E<T>& e )
-{
-   std::cout << "here!\n";
-   return;
-}
 
 } }
 
