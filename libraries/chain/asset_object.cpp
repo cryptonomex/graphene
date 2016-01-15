@@ -158,3 +158,40 @@ string asset_object::amount_to_string(share_type amount) const
       result += "." + fc::to_string(scaled_precision.value + decimals).erase(0,1);
    return result;
 }
+
+struct asset_object_options_ext_get_transfer_fee_options_visitor
+{
+   optional<asset_options::ext::transfer_fee_options> operator( const void_t& e )
+   { return optional<asset_options::ext::transfer_fee_options>(); }
+
+   optional<asset_options::ext::transfer_fee_options> operator( const transfer_fee_options& e )
+   { return optional<asset_options::ext::transfer_fee_options>( e ); }
+}
+
+optional<asset_options::ext::transfer_fee_options> asset_object::get_transfer_fee_options() const
+{
+   if( options.extensions.size() > 0 )
+   {
+      asset_object_options_ext_get_transfer_fee_options_visitor vtor;
+      for( const asset_options::future_extensions& e : options.extensions )
+      {
+         optional<asset_options::ext::transfer_fee_options> o = e.visit( vtor );
+         if( o.valid() ) return o;
+      }
+   }
+   return optional<asset_options::ext::transfer_fee_options>();
+}
+
+asset_transfer_fee_mode asset_object::get_transfer_fee_mode() const
+{
+   if( options.extensions.size() > 0 )
+   {
+      asset_object_options_ext_get_transfer_fee_options_visitor vtor;
+      for( const asset_options::future_extensions& e : options.extensions )
+      {
+         optional<asset_options::ext::transfer_fee_options> o = e.visit( vtor );
+         if( o.valid() ) return o->fee_mode;
+      }
+   }
+   return asset_transfer_fee_mode_flat;
+}

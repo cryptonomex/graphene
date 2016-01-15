@@ -77,6 +77,12 @@ namespace graphene { namespace chain {
           * available for withdrawal) rather than requiring the normal vesting period.
           */
          share_type pending_vested_fees;
+         /**
+          * For the fees split in different ways
+          */
+         share_type pre_split_fees_network;
+         share_type pre_split_fees_others;
+         share_type pre_split_vested_fees_others;
 
          /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees
          void process_fees(const account_object& a, database& d) const;
@@ -388,5 +394,6 @@ FC_REFLECT_DERIVED( graphene::chain::account_statistics_object,
                     (total_core_in_orders)
                     (lifetime_fees_paid)
                     (pending_fees)(pending_vested_fees)
+                    (pre_split_fees_network)(pre_split_fees_others)(pre_split_vested_fees_others)
                   )
 

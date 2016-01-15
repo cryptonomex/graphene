@@ -74,6 +74,9 @@
 #define GRAPHENE_DEFAULT_MAX_ASSET_WHITELIST_AUTHORITIES        10
 #define GRAPHENE_DEFAULT_MAX_ASSET_FEED_PUBLISHERS              10
 
+#define GRAPHENE_DEFAULT_TRANSFER_FEE_MODE                      0 // flat mode
+#define GRAPHENE_DEFAULT_TRANSFER_FEE_PERCENT                   GRAPHENE_1_PERCENT // 1%
+
 /**
  *  These ratios are fixed point numbers with a denominator of GRAPHENE_COLLATERAL_RATIO_DENOM, the
  *  minimum maitenance collateral is therefore 1.001x and the default

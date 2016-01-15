@@ -44,8 +44,14 @@ namespace graphene { namespace chain {
    struct transfer_operation : public base_operation
    {
       struct fee_parameters_type {
-         uint64_t fee       = 20 * GRAPHENE_BLOCKCHAIN_PRECISION;
-         uint32_t price_per_kbyte = 10 * GRAPHENE_BLOCKCHAIN_PRECISION; /// only required for large memos.
+         uint64_t fee             =  20 * GRAPHENE_BLOCKCHAIN_PRECISION;
+         uint32_t price_per_kbyte =  10 * GRAPHENE_BLOCKCHAIN_PRECISION; /// only required for large memos.
+         /// Minimum fee amount, take effect when transfer asset with percentage based fee mode
+         uint32_t min_fee         =   6 * GRAPHENE_BLOCKCHAIN_PRECISION;
+         /// Maximum fee amount, take effect when transfer asset with percentage based fee mode
+         uint32_t max_fee         = 300 * GRAPHENE_BLOCKCHAIN_PRECISION;
+         /// the percentage, take effect when transfer asset with percentage based fee mode
+         uint16_t percentage      = GRAPHENE_DEFAULT_TRANSFER_FEE_PERCENT;
       };
 
       asset            fee;
@@ -63,6 +69,7 @@ namespace graphene { namespace chain {
       account_id_type fee_payer()const { return from; }
       void            validate()const;
       share_type      calculate_fee(const fee_parameters_type& k)const;
+      share_type      calculate_fee(const fee_parameters_type& k, asset_object& a)const;
    };
 
    /**
@@ -100,7 +107,7 @@ namespace graphene { namespace chain {
 
 }} // graphene::chain
 
-FC_REFLECT( graphene::chain::transfer_operation::fee_parameters_type, (fee)(price_per_kbyte) )
+FC_REFLECT( graphene::chain::transfer_operation::fee_parameters_type, (fee)(price_per_kbyte)(min_fee)(max_fee)(percentage) )
 FC_REFLECT( graphene::chain::override_transfer_operation::fee_parameters_type, (fee)(price_per_kbyte) )
 
 FC_REFLECT( graphene::chain::override_transfer_operation, (fee)(issuer)(from)(to)(amount)(memo)(extensions) )

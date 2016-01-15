@@ -26,8 +26,30 @@
 namespace graphene { namespace chain {
 
 share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule )const
+   // FIXME need hard fork check logic here or somewhere else for backward compatibility.
+   FC_THROW( "Deprecated. Use calculate_fee( const fee_parameters_type& schedule, const asset_object& asset) instead." );
+}
+
+share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule, const asset_object& asset)const
 {
-   share_type core_fee_required = schedule.fee;
+   share_type core_fee_required;
+   optional<asset_options::ext::transfer_fee_options> o = asset.get_transfer_fee_options();
+   if( !o.valid() || o.fee_mode == asset_transfer_fee_mode_flat ) // flat fee mode
+   {
+      core_fee_required = schedule.fee;
+   }
+   else if( o.fee_mode == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
+   {
+      // need to know CER of amount.asset_id so that fee can be calculated
+      // fee = amount.amount * ~asset.CER * asset.transfer_fee_options.percentage
+      auto percent_amout = fc::uint128(amount.amount);
+      percent_amount *= o.percentage;
+      percent_amount /= GRAPHENE_100_PERCENT;
+      auto core_fee = asset( percent_amount.to_int64(), amount.asset_id ) * ( ~asset.core_exchange_rate );
+      core_fee_required = core_fee.amount;
+      if( core_fee_required < schedule.min_fee ) core_fee_required = schedule.min_fee;
+      if( core_fee_required > schedule.max_fee ) core_fee_required = schedule.max_fee;
+   }
    if( memo )
       core_fee_required += calculate_data_fee( fc::raw::pack_size(memo), schedule.price_per_kbyte );
    return core_fee_required;
