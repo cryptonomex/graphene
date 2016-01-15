@@ -159,25 +159,14 @@ string asset_object::amount_to_string(share_type amount) const
    return result;
 }
 
-struct asset_object_options_ext_get_transfer_fee_options_visitor
-{
-   typedef optional<asset_options::ext::transfer_fee_options> result_type;
-   result_type operator()( const void_t& e ) const
-   { return optional<asset_options::ext::transfer_fee_options>(); }
-
-   result_type operator()( const asset_options::ext::transfer_fee_options& e ) const
-   { return optional<asset_options::ext::transfer_fee_options>( e ); }
-};
-
 optional<asset_options::ext::transfer_fee_options> asset_object::get_transfer_fee_options() const
 {
    if( options.extensions.size() > 0 )
    {
-      asset_object_options_ext_get_transfer_fee_options_visitor vtor;
       for( const asset_options::future_extensions& e : options.extensions )
       {
-         optional<asset_options::ext::transfer_fee_options> o = e.visit( vtor );
-         if( o.valid() ) return o;
+         if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_options>::value )
+            return optional<asset_options::ext::transfer_fee_options>( e.get<asset_options::ext::transfer_fee_options>() );
       }
    }
    return optional<asset_options::ext::transfer_fee_options>();
@@ -187,11 +176,10 @@ asset_transfer_fee_mode asset_object::get_transfer_fee_mode() const
 {
    if( options.extensions.size() > 0 )
    {
-      asset_object_options_ext_get_transfer_fee_options_visitor vtor;
       for( const asset_options::future_extensions& e : options.extensions )
       {
-         optional<asset_options::ext::transfer_fee_options> o = e.visit( vtor );
-         if( o.valid() ) return o->fee_mode;
+         if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_options>::value )
+            return e.get<asset_options::ext::transfer_fee_options>().fee_mode;
       }
    }
    return asset_transfer_fee_mode_flat;

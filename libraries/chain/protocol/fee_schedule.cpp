@@ -87,27 +87,6 @@ namespace graphene { namespace chain {
 
    };
 
-   struct transfer_operation_calc_fee_visitor
-   {
-      typedef uint64_t result_type;
-
-      const fee_parameters& param;
-      const asset_object& asset_obj;
-      transfer_operation_calc_fee_visitor( const fee_parameters& p, const asset_object& o ):param(p),asset_obj(o){}
-
-      template<typename OpType>
-      result_type operator()(  const OpType& op )const
-      {
-         return op.calculate_fee( param.get<typename OpType::fee_parameters_type>() ).value;
-      }
-
-      result_type operator()(  const transfer_operation& op )const
-      {
-         return op.calculate_fee( transfer_operation::fee_parameters_type(), asset_obj ).value;
-      }
-
-   };
-
    struct set_fee_visitor
    {
       typedef void result_type;
@@ -141,46 +120,42 @@ namespace graphene { namespace chain {
       this->scale = 0;
    }
 
-   asset fee_schedule::calculate_fee( const operation& op, const price& core_exchange_rate )const
+   fee_parameters fee_schedule::find_op_fee_parameters( const operation& op )const
    {
-      //idump( (op)(core_exchange_rate) );
       fee_parameters params; params.set_which(op.which());
       auto itr = parameters.find(params);
       if( itr != parameters.end() ) params = *itr;
+      return params;
+   }
+
+   asset fee_schedule::calculate_fee( const operation& op, const price& core_exchange_rate )const
+   {
+      //idump( (op)(core_exchange_rate) );
+      const fee_parameters& params = find_op_fee_parameters( op );
       auto base_value = op.visit( calc_fee_visitor( params ) );
+      return scale_and_convert_fee( base_value, core_exchange_rate );
+   }
+
+   asset fee_schedule::calculate_fee( const operation& op, const asset_object& asset_obj, const price& core_exchange_rate )const
+   {
+      if( op.which() != operation::tag<transfer_operation>::value )
+         return calculate_fee( op, core_exchange_rate );
+
+      //idump( (op)(core_exchange_rate) );
+      const fee_parameters& params = find_op_fee_parameters( op );
+      auto& transfer_op = op.get<transfer_operation>();
+      auto& transfer_fee_param = params.get<transfer_operation::fee_parameters_type>();
+      auto base_value = transfer_op.calculate_fee( transfer_fee_param, asset_obj ).value;
+      return scale_and_convert_fee( base_value, core_exchange_rate );
+   }
+
+   asset fee_schedule::scale_and_convert_fee( const uint64_t base_value, const price& core_exchange_rate )const
+   {
       auto scaled = fc::uint128(base_value) * scale;
       scaled /= GRAPHENE_100_PERCENT;
       FC_ASSERT( scaled <= GRAPHENE_MAX_SHARE_SUPPLY );
       //idump( (base_value)(scaled)(core_exchange_rate) );
       auto result = asset( scaled.to_uint64(), asset_id_type(0) ) * core_exchange_rate;
-      //FC_ASSERT( result * core_exchange_rate >= asset( scaled.to_uint64()) );
-
-      while( result * core_exchange_rate < asset( scaled.to_uint64()) )
-        result.amount++;
-
-      FC_ASSERT( result.amount <= GRAPHENE_MAX_SHARE_SUPPLY );
-      return result;
-   }
-
-   asset fee_schedule::calculate_fee( const operation& op, const asset_object& asset_obj, const price& core_exchange_rate )const
-   {
-      //idump( (op)(core_exchange_rate) );
-      fee_parameters params; params.set_which(op.which());
-      auto itr = parameters.find(params);
-      if( itr != parameters.end() ) params = *itr;
-      share_type base_value;
-      if( op.which() != operation::tag<transfer_operation>::value )
-         base_value = op.visit( calc_fee_visitor( params ) );
-      else // transfer operation
-      {
-         base_value = op.visit( transfer_operation_calc_fee_visitor( params, asset_obj ) );
-         //base_value = ((transfer_operation&)op).calculate_fee ( params, asset_obj ) ;
-      }
-      auto scaled = fc::uint128(base_value.value) * scale;
-      scaled /= GRAPHENE_100_PERCENT;
-      FC_ASSERT( scaled <= GRAPHENE_MAX_SHARE_SUPPLY );
-      //idump( (base_value)(scaled)(core_exchange_rate) );
-      auto result = asset( scaled.to_uint64(), 0 ) * core_exchange_rate;
       //FC_ASSERT( result * core_exchange_rate >= asset( scaled.to_uint64()) );
 
       while( result * core_exchange_rate < asset( scaled.to_uint64()) )
