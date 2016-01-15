@@ -22,30 +22,32 @@
  * THE SOFTWARE.
  */
 #include <graphene/chain/protocol/transfer.hpp>
+#include <graphene/chain/asset_object.hpp>
 
 namespace graphene { namespace chain {
 
 share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule )const
+{
    // FIXME need hard fork check logic here or somewhere else for backward compatibility.
    FC_THROW( "Deprecated. Use calculate_fee( const fee_parameters_type& schedule, const asset_object& asset) instead." );
 }
 
-share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule, const asset_object& asset)const
+share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule, const asset_object& asset_obj)const
 {
    share_type core_fee_required;
-   optional<asset_options::ext::transfer_fee_options> o = asset.get_transfer_fee_options();
-   if( !o.valid() || o.fee_mode == asset_transfer_fee_mode_flat ) // flat fee mode
+   auto o = asset_obj.get_transfer_fee_options();
+   if( !o.valid() || o->fee_mode == asset_transfer_fee_mode_flat || asset_obj.options.core_exchange_rate.is_null() ) // flat fee mode
    {
       core_fee_required = schedule.fee;
    }
-   else if( o.fee_mode == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
+   else if( o->fee_mode == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
    {
       // need to know CER of amount.asset_id so that fee can be calculated
-      // fee = amount.amount * ~asset.CER * asset.transfer_fee_options.percentage
-      auto percent_amout = fc::uint128(amount.amount);
-      percent_amount *= o.percentage;
+      // fee = amount.amount * ~asset.CER * transfer_operation.fee_parameters_type.percentage
+      auto percent_amount = fc::uint128(amount.amount.value);
+      percent_amount *= schedule.percentage;
       percent_amount /= GRAPHENE_100_PERCENT;
-      auto core_fee = asset( percent_amount.to_int64(), amount.asset_id ) * ( ~asset.core_exchange_rate );
+      auto core_fee = asset( percent_amount.to_uint64(), amount.asset_id ) * ( ~asset_obj.options.core_exchange_rate );
       core_fee_required = core_fee.amount;
       if( core_fee_required < schedule.min_fee ) core_fee_required = schedule.min_fee;
       if( core_fee_required > schedule.max_fee ) core_fee_required = schedule.max_fee;

@@ -84,6 +84,28 @@ namespace graphene { namespace chain {
       {
          return op.calculate_fee( param.get<typename OpType::fee_parameters_type>() ).value;
       }
+
+   };
+
+   struct transfer_operation_calc_fee_visitor
+   {
+      typedef uint64_t result_type;
+
+      const fee_parameters& param;
+      const asset_object& asset_obj;
+      transfer_operation_calc_fee_visitor( const fee_parameters& p, const asset_object& o ):param(p),asset_obj(o){}
+
+      template<typename OpType>
+      result_type operator()(  const OpType& op )const
+      {
+         return op.calculate_fee( param.get<typename OpType::fee_parameters_type>() ).value;
+      }
+
+      result_type operator()(  const transfer_operation& op )const
+      {
+         return op.calculate_fee( transfer_operation::fee_parameters_type(), asset_obj ).value;
+      }
+
    };
 
    struct set_fee_visitor
@@ -140,20 +162,21 @@ namespace graphene { namespace chain {
       return result;
    }
 
-   asset fee_schedule::calculate_fee( const operation& op, const asset_object& asset, const price& core_exchange_rate )const
+   asset fee_schedule::calculate_fee( const operation& op, const asset_object& asset_obj, const price& core_exchange_rate )const
    {
       //idump( (op)(core_exchange_rate) );
       fee_parameters params; params.set_which(op.which());
       auto itr = parameters.find(params);
       if( itr != parameters.end() ) params = *itr;
-      auto base_value;
+      share_type base_value;
       if( op.which() != operation::tag<transfer_operation>::value )
          base_value = op.visit( calc_fee_visitor( params ) );
       else // transfer operation
       {
-         base_value = op.calculate_fee ( params, asset ) ;
+         base_value = op.visit( transfer_operation_calc_fee_visitor( params, asset_obj ) );
+         //base_value = ((transfer_operation&)op).calculate_fee ( params, asset_obj ) ;
       }
-      auto scaled = fc::uint128(base_value) * scale;
+      auto scaled = fc::uint128(base_value.value) * scale;
       scaled /= GRAPHENE_100_PERCENT;
       FC_ASSERT( scaled <= GRAPHENE_MAX_SHARE_SUPPLY );
       //idump( (base_value)(scaled)(core_exchange_rate) );

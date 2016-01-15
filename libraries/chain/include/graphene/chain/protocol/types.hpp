@@ -100,7 +100,7 @@ namespace graphene { namespace chain {
       |witness_fed_asset|committee_fed_asset;
    const static uint32_t UIA_ASSET_ISSUER_PERMISSION_MASK = charge_market_fee|white_list|override_authority|transfer_restricted|disable_confidential;
 
-   enum asset_transfer_fee_mode_type
+   enum asset_transfer_fee_mode
    {
       asset_transfer_fee_mode_flat              = 0,
       asset_transfer_fee_mode_percentage_simple = 1
@@ -409,4 +409,9 @@ FC_REFLECT_ENUM( graphene::chain::asset_issuer_permission_flags,
    (disable_confidential)
    (witness_fed_asset)
    (committee_fed_asset)
+   )
+
+FC_REFLECT_ENUM( graphene::chain::asset_transfer_fee_mode,
+   (asset_transfer_fee_mode_flat)
+   (asset_transfer_fee_mode_percentage_simple)
    )

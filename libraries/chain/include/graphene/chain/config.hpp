@@ -74,7 +74,7 @@
 #define GRAPHENE_DEFAULT_MAX_ASSET_WHITELIST_AUTHORITIES        10
 #define GRAPHENE_DEFAULT_MAX_ASSET_FEED_PUBLISHERS              10
 
-#define GRAPHENE_DEFAULT_TRANSFER_FEE_MODE                      0 // flat mode
+#define GRAPHENE_DEFAULT_TRANSFER_FEE_MODE                      asset_transfer_fee_mode_flat
 #define GRAPHENE_DEFAULT_TRANSFER_FEE_PERCENT                   GRAPHENE_1_PERCENT // 1%
 
 /**

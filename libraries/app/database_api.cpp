@@ -1698,13 +1698,14 @@ vector< fc::variant > database_api_impl::get_required_fees( const vector<operati
          result.push_back( helper.set_op_fees( op ) );
       else
       {
-         asset_id_type transferring_asset_id = ((transfer_operation)op).amount.asset_id;
+         // transfer_operation need asset_object to calculate fees
+         asset_id_type transferring_asset_id = op.get<transfer_operation>().amount.asset_id;
          const asset_object& transferring_asset_object = transferring_asset_id(_db);
-         asset fee = _db.current_fee_schedule.set_fee( op, transferring_asset_object, core_exchange_rate );
-         fc::variant result;
-         fc::to_variant( fee, result );
+         asset fee = _db.current_fee_schedule().set_fee( op, transferring_asset_object, a.options.core_exchange_rate );
+         fc::variant result2;
+         fc::to_variant( fee, result2 );
 
-         result.push_back( result );
+         result.push_back( result2 );
       }
    }
    return result;

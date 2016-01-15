@@ -39,3 +39,8 @@ object_database/*
 
 *.pyc
 *.pyo
+
+libraries/egenesis/egenesis_brief.cpp
+libraries/egenesis/egenesis_full.cpp
+libraries/egenesis/embed_genesis
+

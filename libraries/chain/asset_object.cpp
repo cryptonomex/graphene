@@ -161,12 +161,13 @@ string asset_object::amount_to_string(share_type amount) const
 
 struct asset_object_options_ext_get_transfer_fee_options_visitor
 {
-   optional<asset_options::ext::transfer_fee_options> operator( const void_t& e )
+   typedef optional<asset_options::ext::transfer_fee_options> result_type;
+   result_type operator()( const void_t& e ) const
    { return optional<asset_options::ext::transfer_fee_options>(); }
 
-   optional<asset_options::ext::transfer_fee_options> operator( const transfer_fee_options& e )
+   result_type operator()( const asset_options::ext::transfer_fee_options& e ) const
    { return optional<asset_options::ext::transfer_fee_options>( e ); }
-}
+};
 
 optional<asset_options::ext::transfer_fee_options> asset_object::get_transfer_fee_options() const
 {
