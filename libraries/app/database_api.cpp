@@ -1628,11 +1628,13 @@ vector< fc::variant > database_api::get_required_fees( const vector<operation>& 
 struct get_required_fees_helper
 {
    get_required_fees_helper(
+      graphene::chain::database& _db,
       const fee_schedule& _current_fee_schedule,
       const price& _core_exchange_rate,
       uint32_t _max_recursion
       )
-      : current_fee_schedule(_current_fee_schedule),
+      : db(_db),
+        current_fee_schedule(_current_fee_schedule),
         core_exchange_rate(_core_exchange_rate),
         max_recursion(_max_recursion)
    {}
@@ -1642,6 +1644,16 @@ struct get_required_fees_helper
       if( op.which() == operation::tag<proposal_create_operation>::value )
       {
          return set_proposal_create_op_fees( op );
+      }
+      else if(op.which() == operation::tag<transfer_operation>::value )
+      {
+         // transfer_operation need asset_object to calculate fees
+         asset_id_type transferring_asset_id = op.get<transfer_operation>().amount.asset_id;
+         const asset_object& transferring_asset_object = transferring_asset_id(db);
+         asset fee = current_fee_schedule.set_fee( op, transferring_asset_object, core_exchange_rate );
+         fc::variant result;
+         fc::to_variant( fee, result );
+         return result;
       }
       else
       {
@@ -1671,6 +1683,7 @@ struct get_required_fees_helper
       return vresult;
    }
 
+   graphene::chain::database& db;
    const fee_schedule& current_fee_schedule;
    const price& core_exchange_rate;
    uint32_t max_recursion;
@@ -1689,24 +1702,13 @@ vector< fc::variant > database_api_impl::get_required_fees( const vector<operati
    result.reserve(ops.size());
    const asset_object& a = id(_db);
    get_required_fees_helper helper(
+      _db,
       _db.current_fee_schedule(),
       a.options.core_exchange_rate,
       GET_REQUIRED_FEES_MAX_RECURSION );
    for( operation& op : _ops )
    {
-      if( op.which() != operation::tag<transfer_operation>::value )
-         result.push_back( helper.set_op_fees( op ) );
-      else
-      {
-         // transfer_operation need asset_object to calculate fees
-         asset_id_type transferring_asset_id = op.get<transfer_operation>().amount.asset_id;
-         const asset_object& transferring_asset_object = transferring_asset_id(_db);
-         asset fee = _db.current_fee_schedule().set_fee( op, transferring_asset_object, a.options.core_exchange_rate );
-         fc::variant result2;
-         fc::to_variant( fee, result2 );
-
-         result.push_back( result2 );
-      }
+      result.push_back( helper.set_op_fees( op ) );
    }
    return result;
 }
