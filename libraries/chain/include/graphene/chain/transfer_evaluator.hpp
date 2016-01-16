@@ -35,6 +35,9 @@ namespace graphene { namespace chain {
 
          void_result do_evaluate( const transfer_operation& o );
          void_result do_apply( const transfer_operation& o );
+
+      private:
+         void pay_fee( const transfer_operation& o );
    };
 
    class override_transfer_evaluator : public evaluator<override_transfer_evaluator>

@@ -29,6 +29,7 @@
 
 namespace graphene { namespace chain {
 
+/// @return a * p% / 100%
 share_type cut_fee(share_type a, uint16_t p)
 {
    if( a == 0 || p == 0 )
@@ -42,6 +43,49 @@ share_type cut_fee(share_type a, uint16_t p)
    return r.to_uint64();
 }
 
+/// @return a * p% / t%
+share_type cut_fee(share_type a, uint16_t p, uint16_t t)
+{
+   if( a == 0 || p == 0 )
+      return 0;
+   if( p >= t )
+      return a;
+
+   fc::uint128 r(a.value);
+   r *= p;
+   r /= t;
+   return r.to_uint64();
+}
+
+bool account_object::is_authorized_asset(const asset_object& asset_obj, const database& d) const
+{
+   if( d.head_block_time() > HARDFORK_416_TIME )
+   {
+      if( !(asset_obj.options.flags & white_list) )
+         return true;
+   }
+
+   for( const auto id : blacklisting_accounts )
+   {
+      if( asset_obj.options.blacklist_authorities.find(id) != asset_obj.options.blacklist_authorities.end() )
+         return false;
+   }
+
+   if( d.head_block_time() > HARDFORK_415_TIME )
+   {
+      if( asset_obj.options.whitelist_authorities.size() == 0 )
+         return true;
+   }
+
+   for( const auto id : whitelisting_accounts )
+   {
+      if( asset_obj.options.whitelist_authorities.find(id) != asset_obj.options.whitelist_authorities.end() )
+         return true;
+   }
+
+   return false;
+}
+
 void account_balance_object::adjust_balance(const asset& delta)
 {
    assert(delta.asset_id == asset_type);
@@ -50,8 +94,10 @@ void account_balance_object::adjust_balance(const asset& delta)
 
 void account_statistics_object::process_fees(const account_object& a, database& d) const
 {
-   if( pending_fees > 0 || pending_vested_fees > 0 )
+   if( pending_fees > 0 || pending_vested_fees > 0
+         || pre_split_fees_network > 0 || pre_split_fees_others > 0 || pre_split_vested_fees_others > 0)
    {
+      // split pending fees among network, lifetime referrer, registrar, referrer
       auto pay_out_fees = [&](const account_object& account, share_type core_fee_total, bool require_vesting)
       {
          // Check the referrer -- if he's no longer a member, pay to the lifetime referrer instead.
@@ -94,10 +140,65 @@ void account_statistics_object::process_fees(const account_object& a, database& 
       pay_out_fees(a, pending_fees, true);
       pay_out_fees(a, pending_vested_fees, false);
 
+
+      // pay pre-split network fees to network
+      auto pay_out_network_fees = [&]( share_type network_fee_total )
+      {
+
+#ifndef NDEBUG
+         const auto& props = d.get_global_properties();
+
+         share_type reserved = cut_fee(network_fee_total, props.parameters.reserve_percent_of_fee);
+         share_type accumulated = network_fee_total - reserved;
+         assert( accumulated + reserved == network_fee_total );
+#endif
+         d.modify(asset_dynamic_data_id_type()(d), [network_fee_total](asset_dynamic_data_object& d) {
+            d.accumulated_fees += network_fee_total;
+         });
+      };
+
+      pay_out_network_fees(pre_split_fees_network);
+
+
+      // split pre-split non-network fees among lifetime referrer, registrar, referrer
+      auto pay_out_other_fees = [&](const account_object& account, share_type other_fee_total, bool require_vesting)
+      {
+         // Check the referrer -- if he's no longer a member, pay to the lifetime referrer instead.
+         // No need to check the registrar; registrars are required to be lifetime members.
+         if( account.referrer(d).is_basic_account(d.head_block_time()) )
+            d.modify(account, [](account_object& a) {
+               a.referrer = a.lifetime_referrer;
+            });
+
+         share_type lifetime_cut = cut_fee(core_fee_total,
+                                           account.lifetime_referrer_fee_percentage,
+                                           GRAPHENE_100_PERCENT - account.network_fee_percentage);
+         share_type referral = other_fee_total - lifetime_cut;
+
+         // Potential optimization: Skip some of this math and object lookups by special casing on the account type.
+         // For example, if the account is a lifetime member, we can skip all this and just deposit the referral to
+         // it directly.
+         share_type referrer_cut = cut_fee(referral, account.referrer_rewards_percentage);
+         share_type registrar_cut = referral - referrer_cut;
+
+         d.deposit_cashback(d.get(account.lifetime_referrer), lifetime_cut, require_vesting);
+         d.deposit_cashback(d.get(account.referrer), referrer_cut, require_vesting);
+         d.deposit_cashback(d.get(account.registrar), registrar_cut, require_vesting);
+
+         assert( referrer_cut + registrar_cut + lifetime_cut == other_fee_total );
+      };
+
+      pay_out_other_fees(a, pre_split_fees_others, true);
+      pay_out_other_fees(a, pre_split_vested_fees_others, false);
+
       d.modify(*this, [&](account_statistics_object& s) {
-         s.lifetime_fees_paid += pending_fees + pending_vested_fees;
+         s.lifetime_fees_paid += ( pending_fees + pending_vested_fees + pre_split_fees_network
+                                 + pre_split_fees_others + pre_split_vested_fees_others );
          s.pending_fees = 0;
          s.pending_vested_fees = 0;
+         s.pre_split_fees_network = 0;
+         s.pre_split_fees_others = 0;
+         s.pre_split_vested_fees_others = 0;
       });
    }
 }
@@ -108,6 +209,32 @@ void account_statistics_object::pay_fee( share_type core_fee, share_type cashbac
       pending_fees += core_fee;
    else
       pending_vested_fees += core_fee;
+}
+
+void account_statistics_object::pay_fee_pre_split_network( share_type core_fee,
+                                                           share_type cashback_vesting_threshold,
+                                                           share_type network_fee )
+{
+   pre_split_fees_network += network_fee;
+   if( core_fee > cashback_vesting_threshold )
+      pre_split_fees_others += ( core_fee - network_fee );
+   else
+      pre_split_vested_fees_others += ( core_fee - network_fee );
+}
+
+void account_object::options_type::validate() const
+{
+   auto needed_witnesses = num_witness;
+   auto needed_committee = num_committee;
+
+   for( vote_id_type id : votes )
+      if( id.type() == vote_id_type::witness && needed_witnesses )
+         --needed_witnesses;
+      else if ( id.type() == vote_id_type::committee && needed_committee )
+         --needed_committee;
+
+   FC_ASSERT( needed_witnesses == 0 && needed_committee == 0,
+              "May not specify fewer witnesses or committee members than the number voted for.");
 }
 
 set<account_id_type> account_member_index::get_account_members(const account_object& a)const

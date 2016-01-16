@@ -91,6 +91,11 @@ namespace graphene { namespace chain {
           * Core fees are paid into the account_statistics_object by this method
           */
          void pay_fee( share_type core_fee, share_type cashback_vesting_threshold );
+
+         /**
+          * Pre-split core fees are paid into the account_statistics_object by this method
+          */
+         void pay_fee_pre_split_network( share_type core_fee, share_type cashback_vesting_threshold, share_type network_fee );
    };
 
    /**

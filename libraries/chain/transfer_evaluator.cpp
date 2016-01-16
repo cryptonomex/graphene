@@ -39,6 +39,15 @@ void_result transfer_evaluator::do_evaluate( const transfer_operation& op )
 
    try {
 
+      if( !trx_state->skip_fee_schedule_check )
+      {
+         share_type required_core_fee = d.current_fee_schedule().calculate_fee( op, asset_type ).amount;
+         GRAPHENE_ASSERT( core_fee_paid >= required_core_fee,
+                    insufficient_fee,
+                    "Insufficient Fee Paid",
+                    ("core_fee_paid",core_fee_paid)("required",requred_core_fee) );
+      }
+
       GRAPHENE_ASSERT(
          is_authorized_asset( d, from_account, asset_type ),
          transfer_from_account_not_whitelisted,
@@ -76,12 +85,32 @@ void_result transfer_evaluator::do_evaluate( const transfer_operation& op )
 
 void_result transfer_evaluator::do_apply( const transfer_operation& o )
 { try {
+   pay_fee( o );
    db().adjust_balance( o.from, -o.amount );
    db().adjust_balance( o.to, o.amount );
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
 
 
+void transfer_evaluator::transfer_evaluator::pay_fee( const transfer_operation& o )
+{ try {
+   database& d = db();
+   const asset_object&   asset_type      = o.amount.asset_id(d);
+   d.modify(*fee_paying_account_statistics, [&](account_statistics_object& s)
+   {
+      auto vesting_threshold = d.get_global_properties().parameters.cashback_vesting_threshold;
+      auto fee_mode = asset_type.get_transfer_fee_mode();
+      if( fee_mode == asset_transfer_fee_mode_flat )
+      {
+         s.pay_fee( core_fee_paid, vesting_threshold );
+      }
+      else if( fee_mode == asset_transfer_fee_mode_percentage_simple )
+      {
+         auto& params = d.current_fee_schedule().get<transfer_operation::fee_parameters_type>();
+         s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, params.min_fee );
+      }
+   });
+} FC_CAPTURE_AND_RETHROW( (o) ) }
 
 void_result override_transfer_evaluator::do_evaluate( const override_transfer_operation& op )
 { try {
