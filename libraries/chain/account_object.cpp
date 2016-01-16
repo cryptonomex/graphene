@@ -170,7 +170,7 @@ void account_statistics_object::process_fees(const account_object& a, database& 
                a.referrer = a.lifetime_referrer;
             });
 
-         share_type lifetime_cut = cut_fee(core_fee_total,
+         share_type lifetime_cut = cut_fee(other_fee_total,
                                            account.lifetime_referrer_fee_percentage,
                                            GRAPHENE_100_PERCENT - account.network_fee_percentage);
          share_type referral = other_fee_total - lifetime_cut;

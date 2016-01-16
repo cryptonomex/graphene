@@ -45,7 +45,7 @@ void_result transfer_evaluator::do_evaluate( const transfer_operation& op )
          GRAPHENE_ASSERT( core_fee_paid >= required_core_fee,
                     insufficient_fee,
                     "Insufficient Fee Paid",
-                    ("core_fee_paid",core_fee_paid)("required",requred_core_fee) );
+                    ("core_fee_paid",core_fee_paid)("required",required_core_fee) );
       }
 
       GRAPHENE_ASSERT(
