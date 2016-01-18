@@ -46,6 +46,45 @@ namespace graphene { namespace chain {
       struct fee_parameters_type {
          uint64_t fee             =  20 * GRAPHENE_BLOCKCHAIN_PRECISION;
          uint32_t price_per_kbyte =  10 * GRAPHENE_BLOCKCHAIN_PRECISION; /// only required for large memos.
+      };
+
+      asset            fee;
+      /// Account to transfer asset from
+      account_id_type  from;
+      /// Account to transfer asset to
+      account_id_type  to;
+      /// The amount of asset to transfer from @ref from to @ref to
+      asset            amount;
+
+      /// User provided data encrypted to the memo key of the "to" account
+      optional<memo_data> memo;
+      extensions_type   extensions;
+
+      account_id_type fee_payer()const { return from; }
+      void            validate()const;
+      share_type      calculate_fee(const fee_parameters_type& k)const;
+      share_type      calculate_fee(const fee_parameters_type& k, const asset_object& a)const;
+   };
+
+   /**
+    * @ingroup operations
+    *
+    * @brief Transfers an amount of one asset from one account to another, support simple percentage based fee mode
+    *
+    *  Fees are paid by the "from" account
+    *
+    *  @pre amount.amount > 0
+    *  @pre fee.amount >= 0
+    *  @pre from != to
+    *  @post from account's balance will be reduced by fee and amount
+    *  @post to account's balance will be increased by amount
+    *  @return n/a
+    */
+   struct transfer_v2_operation : public base_operation
+   {
+      struct fee_parameters_type {
+         uint64_t fee             =  20 * GRAPHENE_BLOCKCHAIN_PRECISION;
+         uint32_t price_per_kbyte =  10 * GRAPHENE_BLOCKCHAIN_PRECISION; /// only required for large memos.
          /// Minimum fee amount, take effect when transfer asset with percentage based fee mode
          uint32_t min_fee         =   6 * GRAPHENE_BLOCKCHAIN_PRECISION;
          /// Maximum fee amount, take effect when transfer asset with percentage based fee mode
@@ -68,7 +107,7 @@ namespace graphene { namespace chain {
 
       account_id_type fee_payer()const { return from; }
       void            validate()const;
-      share_type      calculate_fee(const fee_parameters_type& k)const;
+      share_type      calculate_fee(const fee_parameters_type& k)const; /// don't use it
       share_type      calculate_fee(const fee_parameters_type& k, const asset_object& a)const;
    };
 
@@ -107,8 +146,10 @@ namespace graphene { namespace chain {
 
 }} // graphene::chain
 
-FC_REFLECT( graphene::chain::transfer_operation::fee_parameters_type, (fee)(price_per_kbyte)(min_fee)(max_fee)(percentage) )
+FC_REFLECT( graphene::chain::transfer_operation::fee_parameters_type, (fee)(price_per_kbyte) )
+FC_REFLECT( graphene::chain::transfer_v2_operation::fee_parameters_type, (fee)(price_per_kbyte)(min_fee)(max_fee)(percentage) )
 FC_REFLECT( graphene::chain::override_transfer_operation::fee_parameters_type, (fee)(price_per_kbyte) )
 
 FC_REFLECT( graphene::chain::override_transfer_operation, (fee)(issuer)(from)(to)(amount)(memo)(extensions) )
 FC_REFLECT( graphene::chain::transfer_operation, (fee)(from)(to)(amount)(memo)(extensions) )
+FC_REFLECT( graphene::chain::transfer_v2_operation, (fee)(from)(to)(amount)(memo)(extensions) )

@@ -117,6 +117,7 @@ public:
    std::string operator()(const T& op)const;
 
    std::string operator()(const transfer_operation& op)const;
+   std::string operator()(const transfer_v2_operation& op)const;
    std::string operator()(const transfer_from_blind_operation& op)const;
    std::string operator()(const transfer_to_blind_operation& op)const;
    std::string operator()(const account_create_operation& op)const;
@@ -2004,7 +2005,7 @@ public:
       account_id_type from_id = from_account.id;
       account_id_type to_id = get_account_id(to);
 
-      transfer_operation xfer_op;
+      transfer_v2_operation xfer_op;
 
       xfer_op.from = from_id;
       xfer_op.to = to_id;
@@ -2533,6 +2534,34 @@ string operation_printer::operator()(const transfer_operation& op) const
                memo = op.memo->get_message(*my_key, op.memo->to);
                out << " -- Memo: " << memo;
             }
+         } catch (const fc::exception& e) {
+            out << " -- could not decrypt memo";
+            elog("Error when decrypting memo: ${e}", ("e", e.to_detail_string()));
+         }
+      }
+   }
+   fee(op.fee);
+   return memo;
+}
+
+string operation_printer::operator()(const transfer_v2_operation& op) const
+{
+   out << "Transfer " << wallet.get_asset(op.amount.asset_id).amount_to_pretty_string(op.amount)
+       << " from " << wallet.get_account(op.from).name << " to " << wallet.get_account(op.to).name;
+   std::string memo;
+   if( op.memo )
+   {
+      if( wallet.is_locked() )
+      {
+         out << " -- Unlock wallet to see memo.";
+      } else {
+         try {
+            FC_ASSERT(wallet._keys.count(op.memo->to), "Memo is encrypted to a key ${k} not in this wallet.",
+                      ("k", op.memo->to));
+            auto my_key = wif_to_key(wallet._keys.at(op.memo->to));
+            FC_ASSERT(my_key, "Unable to recover private key to decrypt memo. Wallet may be corrupted.");
+            memo = op.memo->get_message(*my_key, op.memo->from);
+            out << " -- Memo: " << memo;
          } catch (const fc::exception& e) {
             out << " -- could not decrypt memo";
             elog("Error when decrypting memo: ${e}", ("e", e.to_detail_string()));

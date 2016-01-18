@@ -143,8 +143,9 @@ namespace graphene { namespace chain {
          prepare_fee(op.fee_payer(), op.fee);
          if( !trx_state->skip_fee_schedule_check )
          {
-            // transfer_operation will check in do_evaluate(op)
-            if( o.which() != operation::tag<transfer_operation>::value )
+            // transfer_operation and transfer_v2_operation will check in do_evaluate(op)
+            if( o.which() != operation::tag<transfer_operation>::value
+                  && o.which() != operation::tag<transfer_v2_operation>::value )
                GRAPHENE_ASSERT( core_fee_paid >= db().current_fee_schedule().calculate_fee( op ).amount,
                        insufficient_fee,
                        "Insufficient Fee Paid",
@@ -160,8 +161,8 @@ namespace graphene { namespace chain {
          const auto& op = o.get<typename DerivedEvaluator::operation_type>();
 
          convert_fee();
-         // transfer_operation will pay fee in do_apply(op)
-         if( o.which() != operation::tag<transfer_operation>::value )
+         // transfer_v2_operation will pay fee in do_apply(op)
+         if( o.which() != operation::tag<transfer_v2_operation>::value )
             pay_fee();
 
          auto result = eval->do_apply(op);

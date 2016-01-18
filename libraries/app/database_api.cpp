@@ -1655,6 +1655,16 @@ struct get_required_fees_helper
          fc::to_variant( fee, result );
          return result;
       }
+      else if(op.which() == operation::tag<transfer_v2_operation>::value )
+      {
+         // transfer_v2_operation need asset_object to calculate fees
+         asset_id_type transferring_asset_id = op.get<transfer_v2_operation>().amount.asset_id;
+         const asset_object& transferring_asset_object = transferring_asset_id(db);
+         asset fee = current_fee_schedule.set_fee( op, transferring_asset_object, core_exchange_rate );
+         fc::variant result;
+         fc::to_variant( fee, result );
+         return result;
+      }
       else
       {
          asset fee = current_fee_schedule.set_fee( op, core_exchange_rate );

@@ -35,9 +35,18 @@ namespace graphene { namespace chain {
 
          void_result do_evaluate( const transfer_operation& o );
          void_result do_apply( const transfer_operation& o );
+   };
+
+   class transfer_v2_evaluator : public evaluator<transfer_v2_evaluator>
+   {
+      public:
+         typedef transfer_v2_operation operation_type;
+
+         void_result do_evaluate( const transfer_v2_operation& o );
+         void_result do_apply( const transfer_v2_operation& o );
 
       private:
-         void pay_fee( const transfer_operation& o );
+         void pay_fee( const transfer_v2_operation& o );
    };
 
    class override_transfer_evaluator : public evaluator<override_transfer_evaluator>
