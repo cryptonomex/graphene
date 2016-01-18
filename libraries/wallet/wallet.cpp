@@ -495,7 +495,17 @@ public:
    void set_operation_fees( signed_transaction& tx, const fee_schedule& s  )
    {
       for( auto& op : tx.operations )
-         s.set_fee(op);
+      {
+         if( op.which() == operation::tag<transfer_v2_operation>::value )
+         {
+            s.set_fee( op, get_asset( op.get<transfer_v2_operation>().amount.asset_id ) );
+         }
+         else if( op.which() == operation::tag<transfer_operation>::value )
+         {
+            s.set_fee( op, get_asset( op.get<transfer_operation>().amount.asset_id ) );
+         }
+         else s.set_fee(op);
+      }
    }
 
    variant info() const
