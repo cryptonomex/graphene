@@ -29,7 +29,7 @@ namespace graphene { namespace chain {
 share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule )const
 {
    // FIXME need hard fork check logic here or somewhere else for backward compatibility.
-   GRAPHENE_THROW( "Deprecated. Use calculate_fee( const fee_parameters_type& schedule, const asset_object& asset) instead." );
+   FC_THROW( "Deprecated. Use calculate_fee( const fee_parameters_type& schedule, const asset_object& asset) instead." );
 }
 
 share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule, const asset_object& asset_obj)const
@@ -42,7 +42,7 @@ share_type transfer_operation::calculate_fee( const fee_parameters_type& schedul
    }
    else // other fee modes
    {
-      GRAPHENE_ASSET( "transfer_operation doesn't support asset with non-flat fee mode." );
+      FC_THROW( "transfer_operation doesn't support asset with non-flat fee mode." );
    }
    if( memo )
       core_fee_required += calculate_data_fee( fc::raw::pack_size(memo), schedule.price_per_kbyte );
@@ -59,7 +59,7 @@ void transfer_operation::validate()const
 
 share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& schedule )const
 {
-   GRAPHENE_THROW( "Use calculate_fee( const fee_parameters_type& schedule, const asset_object& asset) instead." );
+   FC_THROW( "Use calculate_fee( const fee_parameters_type& schedule, const asset_object& asset) instead." );
 }
 
 share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& schedule, const asset_object& asset_obj)const
