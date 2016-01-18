@@ -36,7 +36,8 @@ share_type transfer_operation::calculate_fee( const fee_parameters_type& schedul
 {
    share_type core_fee_required;
    auto o = asset_obj.get_transfer_fee_options();
-   if( !o.valid() || o->fee_mode == asset_transfer_fee_mode_flat || asset_obj.options.core_exchange_rate.is_null() ) // flat fee mode
+   if( !o.valid() || o->transfer_fee_mode == asset_transfer_fee_mode_flat
+                  || asset_obj.options.core_exchange_rate.is_null() ) // flat fee mode
    {
       core_fee_required = schedule.fee;
    }
@@ -66,11 +67,12 @@ share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& sche
 {
    share_type core_fee_required;
    auto o = asset_obj.get_transfer_fee_options();
-   if( !o.valid() || o->fee_mode == asset_transfer_fee_mode_flat || asset_obj.options.core_exchange_rate.is_null() ) // flat fee mode
+   if( !o.valid() || o->transfer_fee_mode == asset_transfer_fee_mode_flat
+                  || asset_obj.options.core_exchange_rate.is_null() ) // flat fee mode
    {
       core_fee_required = schedule.fee;
    }
-   else if( o->fee_mode == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
+   else if( o->transfer_fee_mode == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
    {
       // need to know CER of amount.asset_id so that fee can be calculated
       // fee = amount.amount * ~asset.CER * transfer_v2_operation.fee_parameters_type.percentage

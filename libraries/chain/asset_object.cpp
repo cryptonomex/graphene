@@ -179,7 +179,7 @@ asset_transfer_fee_mode asset_object::get_transfer_fee_mode() const
       for( const asset_options::future_extensions& e : options.extensions )
       {
          if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_options>::value )
-            return e.get<asset_options::ext::transfer_fee_options>().fee_mode;
+            return e.get<asset_options::ext::transfer_fee_options>().transfer_fee_mode;
       }
    }
    return asset_transfer_fee_mode_flat;
