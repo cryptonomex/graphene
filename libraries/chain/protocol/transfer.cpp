@@ -76,11 +76,11 @@ share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& sche
    {
       // need to know CER of amount.asset_id so that fee can be calculated
       // fee = amount.amount * ~asset.CER * transfer_v2_operation.fee_parameters_type.percentage
-      auto percent_amount = fc::uint128(amount.amount.value);
-      percent_amount *= schedule.percentage;
-      percent_amount /= GRAPHENE_100_PERCENT;
-      auto core_fee = asset( percent_amount.to_uint64(), amount.asset_id ) * ( ~asset_obj.options.core_exchange_rate );
-      core_fee_required = core_fee.amount;
+      auto core_amount = amount * ( ~asset_obj.options.core_exchange_rate );
+      auto core_fee_amount = fc::uint128(core_amount.amount.value);
+      core_fee_amount *= schedule.percentage;
+      core_fee_amount /= GRAPHENE_100_PERCENT;
+      core_fee_required = core_fee_amount.to_uint64();
       if( core_fee_required < schedule.min_fee ) core_fee_required = schedule.min_fee;
       if( core_fee_required > schedule.max_fee ) core_fee_required = schedule.max_fee;
    }
