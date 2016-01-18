@@ -138,14 +138,24 @@ namespace graphene { namespace chain {
 
    asset fee_schedule::calculate_fee( const operation& op, const asset_object& asset_obj, const price& core_exchange_rate )const
    {
-      if( op.which() != operation::tag<transfer_v2_operation>::value )
+      if( op.which() != operation::tag<transfer_operation>::value
+            && op.which() != operation::tag<transfer_v2_operation>::value )
          return calculate_fee( op, core_exchange_rate );
 
       //idump( (op)(core_exchange_rate) );
+      if( op.which() == operation::tag<transfer_v2_operation>::value )
+      {
+         const fee_parameters& params = find_op_fee_parameters( op );
+         auto& transfer_v2_op = op.get<transfer_v2_operation>();
+         auto& transfer_v2_fee_param = params.get<transfer_v2_operation::fee_parameters_type>();
+         auto base_value = transfer_v2_op.calculate_fee( transfer_v2_fee_param, asset_obj ).value;
+         return scale_and_convert_fee( base_value, core_exchange_rate );
+      }
+
       const fee_parameters& params = find_op_fee_parameters( op );
-      auto& transfer_v2_op = op.get<transfer_v2_operation>();
-      auto& transfer_v2_fee_param = params.get<transfer_v2_operation::fee_parameters_type>();
-      auto base_value = transfer_v2_op.calculate_fee( transfer_v2_fee_param, asset_obj ).value;
+      auto& transfer_op = op.get<transfer_operation>();
+      auto& transfer_fee_param = params.get<transfer_operation::fee_parameters_type>();
+      auto base_value = transfer_op.calculate_fee( transfer_fee_param, asset_obj ).value;
       return scale_and_convert_fee( base_value, core_exchange_rate );
    }
 
