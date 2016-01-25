@@ -125,9 +125,6 @@ namespace graphene { namespace chain {
          asset_options options;
 
 
-         /// @return the optional transfer fee options
-         optional<asset_options::ext::transfer_fee_options> get_transfer_fee_options()const;
-
          /// @return transfer fee mode of this asset, or @asset_transfer_fee_mode_flat if not set
          asset_transfer_fee_mode get_transfer_fee_mode()const;
 

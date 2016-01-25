@@ -159,27 +159,14 @@ string asset_object::amount_to_string(share_type amount) const
    return result;
 }
 
-optional<asset_options::ext::transfer_fee_options> asset_object::get_transfer_fee_options() const
-{
-   if( options.extensions.size() > 0 )
-   {
-      for( const asset_options::future_extensions& e : options.extensions )
-      {
-         if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_options>::value )
-            return optional<asset_options::ext::transfer_fee_options>( e.get<asset_options::ext::transfer_fee_options>() );
-      }
-   }
-   return optional<asset_options::ext::transfer_fee_options>();
-}
-
 asset_transfer_fee_mode asset_object::get_transfer_fee_mode() const
 {
    if( options.extensions.size() > 0 )
    {
       for( const asset_options::future_extensions& e : options.extensions )
       {
-         if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_options>::value )
-            return e.get<asset_options::ext::transfer_fee_options>().transfer_fee_mode;
+         if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_mode_options>::value )
+            return e.get<asset_options::ext::transfer_fee_mode_options>().transfer_fee_mode;
       }
    }
    return asset_transfer_fee_mode_flat;
