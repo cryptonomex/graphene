@@ -73,8 +73,8 @@ share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& sche
    else if( o == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
    {
       // need to know CER of amount.asset_id so that fee can be calculated
-      // fee = amount.amount * ~asset.CER * transfer_v2_operation.fee_parameters_type.percentage
-      auto core_amount = amount * ( ~asset_obj.options.core_exchange_rate );
+      // fee = amount.amount * asset.CER * transfer_v2_operation.fee_parameters_type.percentage
+      auto core_amount = amount * asset_obj.options.core_exchange_rate;
       auto core_fee_amount = fc::uint128(core_amount.amount.value);
       core_fee_amount *= schedule.percentage;
       core_fee_amount /= GRAPHENE_100_PERCENT;
