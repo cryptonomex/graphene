@@ -243,6 +243,13 @@ void_result asset_update_evaluator::do_evaluate(const asset_update_operation& o)
    const asset_object& a = o.asset_to_update(d);
    auto a_copy = a;
    a_copy.options = o.new_options;
+   // check whether hard fork time passed
+   if( d.head_block_time() > HARDFORK_583_TIME )
+   {
+      // if new options contain a null CER, replace it with current CER before validate
+      if( o.new_options.core_exchange_rate.is_null() )
+         a_copy.options.core_exchange_rate = a.options.core_exchange_rate;
+   }
    a_copy.validate();
 
    if( o.new_issuer )
@@ -317,7 +324,11 @@ void_result asset_update_evaluator::do_apply(const asset_update_operation& o)
    d.modify(*asset_to_update, [&](asset_object& a) {
       if( o.new_issuer )
          a.issuer = *o.new_issuer;
-      a.options = o.new_options;
+      // make a copy of new_options; if CER is null, replace it with current CER
+      auto copy_new_options = o.new_options;
+      if( copy_new_options.core_exchange_rate.is_null() )
+         copy_new_options.core_exchange_rate = a.options.core_exchange_rate;
+      a.options = copy_new_options;
    });
 
    return void_result();

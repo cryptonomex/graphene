@@ -108,6 +108,10 @@ namespace graphene { namespace chain {
       /// Perform internal consistency checks.
       /// @throws fc::exception if any check fails
       void validate()const;
+
+      /// Perform internal consistency checks, but don't check core_exchange_rate.
+      /// @throws fc::exception if any check fails
+      void validate_except_cer()const;
    };
 
    /**
@@ -293,8 +297,10 @@ namespace graphene { namespace chain {
     *
     * @pre @ref issuer SHALL be an existing account and MUST match asset_object::issuer on @ref asset_to_update
     * @pre @ref fee SHALL be nonnegative, and @ref issuer MUST have a sufficient balance to pay it
-    * @pre @ref new_options SHALL be internally consistent, as verified by @ref validate()
-    * @post @ref asset_to_update will have options matching those of new_options
+    * @pre @ref new_options SHALL be internally consistent except that core_exchange_rate can be null,
+    *      as verified by @ref validate_except_cer()
+    * @post @ref asset_to_update will have options matching those of new_options, except that core_exchange_rate
+    *       won't be updated if core_exchange_rate in new_options is null
     */
    struct asset_update_operation : public base_operation
    {
