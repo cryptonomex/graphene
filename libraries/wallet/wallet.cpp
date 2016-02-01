@@ -853,7 +853,24 @@ public:
       if( fee_asset_obj.get_id() != asset_id_type() )
       {
          for( auto& op : _builder_transactions[handle].operations )
-            total_fee += gprops.current_fees->set_fee( op, fee_asset_obj.options.core_exchange_rate );
+         {
+            if( op.which() == operation::tag<transfer_v2_operation>::value )
+            {
+               total_fee += gprops.current_fees->set_fee( op,
+                               get_asset( op.get<transfer_v2_operation>().amount.asset_id ),
+                               fee_asset_obj.options.core_exchange_rate );
+            }
+            else if( op.which() == operation::tag<transfer_operation>::value )
+            {
+               total_fee += gprops.current_fees->set_fee( op,
+                               get_asset( op.get<transfer_operation>().amount.asset_id ),
+                               fee_asset_obj.options.core_exchange_rate );
+            }
+            else
+            {
+               total_fee += gprops.current_fees->set_fee( op, fee_asset_obj.options.core_exchange_rate );
+            }
+         }
 
          FC_ASSERT((total_fee * fee_asset_obj.options.core_exchange_rate).amount <=
                    get_object<asset_dynamic_data_object>(fee_asset_obj.dynamic_asset_data_id).fee_pool,
@@ -861,7 +878,22 @@ public:
                    ("asset", fee_asset_obj.symbol));
       } else {
          for( auto& op : _builder_transactions[handle].operations )
-            total_fee += gprops.current_fees->set_fee( op );
+         {
+            if( op.which() == operation::tag<transfer_v2_operation>::value )
+            {
+               total_fee += gprops.current_fees->set_fee( op,
+                               get_asset( op.get<transfer_v2_operation>().amount.asset_id ) );
+            }
+            else if( op.which() == operation::tag<transfer_operation>::value )
+            {
+               total_fee += gprops.current_fees->set_fee( op,
+                               get_asset( op.get<transfer_operation>().amount.asset_id ) );
+            }
+            else
+            {
+               total_fee += gprops.current_fees->set_fee( op );
+            }
+         }
       }
 
       return total_fee;
