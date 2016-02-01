@@ -105,6 +105,16 @@ void_result asset_create_evaluator::do_evaluate( const asset_create_operation& o
       FC_ASSERT( op.precision == op.bitasset_opts->short_backing_asset(d).precision );
    }
 
+   // #583 BSIP10 hard fork check
+   if( d.head_block_time() <= HARDFORK_583_TIME )
+   {
+      for( const auto& e : op.common_options.extensions )
+      {
+         FC_ASSERT( e.which() != asset_options::future_extensions::tag<asset_options::ext::transfer_fee_mode_options>::value,
+                    "Asset ${s} has an extension which requires hardfork #583.", ("s",op.symbol) );
+      }
+   }
+
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (op) ) }
 
@@ -274,6 +284,16 @@ void_result asset_update_evaluator::do_evaluate(const asset_update_operation& o)
    FC_ASSERT( o.new_options.blacklist_authorities.size() <= chain_parameters.maximum_asset_whitelist_authorities );
    for( auto id : o.new_options.blacklist_authorities )
       d.get_object(id);
+
+   // #583 BSIP10 hard fork check
+   if( d.head_block_time() <= HARDFORK_583_TIME )
+   {
+      for( const auto& e : o.new_options.extensions )
+      {
+         FC_ASSERT( e.which() != asset_options::future_extensions::tag<asset_options::ext::transfer_fee_mode_options>::value,
+                    "Asset ${s} has an extension which requires hardfork #583.", ("s",a.symbol) );
+      }
+   }
 
    return void_result();
 } FC_CAPTURE_AND_RETHROW((o)) }

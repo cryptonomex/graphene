@@ -92,7 +92,7 @@ void_result transfer_evaluator::do_apply( const transfer_operation& o )
 
 void_result transfer_v2_evaluator::do_evaluate( const transfer_v2_operation& op )
 { try {
-   
+
    const database& d = db();
 
    const account_object& from_account    = op.from(d);
@@ -101,6 +101,10 @@ void_result transfer_v2_evaluator::do_evaluate( const transfer_v2_operation& op 
    const asset_object&   fee_asset_type  = op.fee.asset_id(d);
 
    try {
+
+      // #583 BSIP10 hard fork check
+      if( d.head_block_time() <= HARDFORK_583_TIME )
+         FC_THROW( "Operation requires hardfork #583" );
 
       if( !trx_state->skip_fee_schedule_check )
       {
@@ -170,7 +174,7 @@ void transfer_v2_evaluator::pay_fee( const transfer_v2_operation& o )
       else if( fee_mode == asset_transfer_fee_mode_percentage_simple )
       {
          auto& params = d.current_fee_schedule().get<transfer_v2_operation::fee_parameters_type>();
-         s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, params.min_fee );
+         s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, params.percentage_min_fee );
       }
    });
 } FC_CAPTURE_AND_RETHROW( (o) ) }

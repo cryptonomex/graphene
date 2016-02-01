@@ -1,0 +1,4 @@
+// #583 [BSIP10] percentage based transfer fee
+#ifndef HARDFORK_583_TIME
+#define HARDFORK_583_TIME (fc::time_point_sec( 1450378800 ))
+#endif

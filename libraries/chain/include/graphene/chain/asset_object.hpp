@@ -125,7 +125,7 @@ namespace graphene { namespace chain {
          asset_options options;
 
 
-         /// @return transfer fee mode of this asset, or @asset_transfer_fee_mode_flat if not set
+         /// @return transfer fee mode of this asset, or @ref asset_transfer_fee_mode_flat if not set
          asset_transfer_fee_mode get_transfer_fee_mode()const;
 
          /// Current supply, fee pool, and collected fees are stored in a separate object as they change frequently.

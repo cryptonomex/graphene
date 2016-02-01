@@ -61,6 +61,7 @@
 #include <fc/thread/scoped_lock.hpp>
 
 #include <graphene/app/api.hpp>
+#include <graphene/chain/hardfork.hpp>
 #include <graphene/chain/asset_object.hpp>
 #include <graphene/chain/protocol/fee_schedule.hpp>
 #include <graphene/utilities/git_revision.hpp>
@@ -2015,13 +2016,15 @@ public:
       account_id_type from_id = from_account.id;
       account_id_type to_id = get_account_id(to);
 
-      transfer_v2_operation xfer_op;
+      // check #583 BSIP10 hard fork time
+      if( time_point_sec(time_point::now()) <= HARDFORK_583_TIME )
+      {
+         transfer_operation xfer_op;
+         xfer_op.from = from_id;
+         xfer_op.to = to_id;
+         xfer_op.amount = asset_obj->amount_from_string(amount);
 
-      xfer_op.from = from_id;
-      xfer_op.to = to_id;
-      xfer_op.amount = asset_obj->amount_from_string(amount);
-
-      if( memo.size() )
+         if( memo.size() )
          {
             xfer_op.memo = memo_data();
             xfer_op.memo->from = from_account.options.memo_key;
@@ -2030,12 +2033,36 @@ public:
                                       to_account.options.memo_key, memo);
          }
 
-      signed_transaction tx;
-      tx.operations.push_back(xfer_op);
-      set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
-      tx.validate();
+         signed_transaction tx;
+         tx.operations.push_back(xfer_op);
+         set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
+         tx.validate();
 
-      return sign_transaction(tx, broadcast);
+         return sign_transaction(tx, broadcast);
+      }
+      else
+      {
+         transfer_v2_operation xfer_op;
+         xfer_op.from = from_id;
+         xfer_op.to = to_id;
+         xfer_op.amount = asset_obj->amount_from_string(amount);
+
+         if( memo.size() )
+         {
+            xfer_op.memo = memo_data();
+            xfer_op.memo->from = from_account.options.memo_key;
+            xfer_op.memo->to = to_account.options.memo_key;
+            xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
+                                      to_account.options.memo_key, memo);
+         }
+
+         signed_transaction tx;
+         tx.operations.push_back(xfer_op);
+         set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
+         tx.validate();
+
+         return sign_transaction(tx, broadcast);
+      }
    } FC_CAPTURE_AND_RETHROW( (from)(to)(amount)(asset_symbol)(memo)(broadcast) ) }
 
    signed_transaction issue_asset(string to_account, string amount, string symbol,
