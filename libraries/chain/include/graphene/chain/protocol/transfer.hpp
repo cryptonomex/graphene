@@ -62,7 +62,9 @@ namespace graphene { namespace chain {
 
       account_id_type fee_payer()const { return from; }
       void            validate()const;
+      /// Old function to calculate fee. Deprecated.
       share_type      calculate_fee(const fee_parameters_type& k)const;
+      /// Calculate fee
       share_type      calculate_fee(const fee_parameters_type& k, const asset_object& a)const;
    };
 
@@ -111,7 +113,8 @@ namespace graphene { namespace chain {
       account_id_type fee_payer()const { return from; }
       void            validate()const;
       share_type      calculate_fee(const fee_parameters_type& k)const; /// don't use it
-      share_type      calculate_fee(const fee_parameters_type& k, const asset_object& a)const;
+      /// Calculate fee and scale. Since it's better that percentage not scale, we scale inside.
+      share_type      calculate_fee(const fee_parameters_type& k, const uint32_t scale, const asset_object& a)const;
    };
 
    /**

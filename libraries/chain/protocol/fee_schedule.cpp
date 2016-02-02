@@ -148,8 +148,9 @@ namespace graphene { namespace chain {
          const fee_parameters& params = find_op_fee_parameters( op );
          auto& transfer_v2_op = op.get<transfer_v2_operation>();
          auto& transfer_v2_fee_param = params.get<transfer_v2_operation::fee_parameters_type>();
-         auto base_value = transfer_v2_op.calculate_fee( transfer_v2_fee_param, asset_obj ).value;
-         return scale_and_convert_fee( base_value, core_exchange_rate );
+         // Since percentage doesn't scale, we scale inside
+         auto scaled_value = transfer_v2_op.calculate_fee( transfer_v2_fee_param, scale, asset_obj ).value;
+         return convert_fee( scaled_value, core_exchange_rate );
       }
 
       const fee_parameters& params = find_op_fee_parameters( op );
@@ -161,10 +162,20 @@ namespace graphene { namespace chain {
 
    asset fee_schedule::scale_and_convert_fee( const uint64_t base_value, const price& core_exchange_rate )const
    {
+      //idump( (base_value)(scaled)(core_exchange_rate) );
+      return convert_fee( scale_fee( base_value ), core_exchange_rate );
+   }
+
+   fc::uint128 fee_schedule::scale_fee( const uint64_t base_value )const
+   {
       auto scaled = fc::uint128(base_value) * scale;
       scaled /= GRAPHENE_100_PERCENT;
       FC_ASSERT( scaled <= GRAPHENE_MAX_SHARE_SUPPLY );
-      //idump( (base_value)(scaled)(core_exchange_rate) );
+      return scaled;
+   }
+
+   asset fee_schedule::convert_fee( const fc::uint128& scaled, const price& core_exchange_rate )const
+   {
       auto result = asset( scaled.to_uint64(), asset_id_type(0) ) * core_exchange_rate;
       //FC_ASSERT( result * core_exchange_rate >= asset( scaled.to_uint64()) );
 

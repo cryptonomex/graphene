@@ -58,16 +58,21 @@ void transfer_operation::validate()const
 
 share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& schedule )const
 {
-   FC_THROW( "Use calculate_fee( const fee_parameters_type& schedule, const asset_object& asset) instead." );
+   FC_THROW( "Use calculate_fee( const fee_parameters_type& schedule, const uint32_t scale, const asset_object& asset ) instead." );
 }
 
-share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& schedule, const asset_object& asset_obj)const
+share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& schedule,
+                                                 const uint32_t scale,
+                                                 const asset_object& asset_obj )const
 {
    share_type core_fee_required;
    auto o = asset_obj.get_transfer_fee_mode();
    if( o == asset_transfer_fee_mode_flat || asset_obj.options.core_exchange_rate.is_null() ) // flat fee mode
    {
-      core_fee_required = schedule.flat_fee;
+      auto core_fee_128 = fc::uint128(schedule.flat_fee);
+      core_fee_128 *= scale;
+      core_fee_128 /= GRAPHENE_100_PERCENT;
+      core_fee_required = core_fee_128.to_uint64();
    }
    else if( o == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
    {
@@ -78,11 +83,24 @@ share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& sche
       core_fee_amount *= schedule.percentage;
       core_fee_amount /= GRAPHENE_100_PERCENT;
       core_fee_required = core_fee_amount.to_uint64();
-      if( core_fee_required < schedule.percentage_min_fee ) core_fee_required = schedule.percentage_min_fee;
-      if( core_fee_required > schedule.percentage_max_fee ) core_fee_required = schedule.percentage_max_fee;
+      auto min_fee_128 = fc::uint128( schedule.percentage_min_fee )
+      min_fee_128 *= scale;
+      min_fee_128 /= GRAPHENE_100_PERCENT;
+      auto min_fee_64 = min_fee_128.to_uint64();
+      auto max_fee_128 = fc::uint128( schedule.percentage_max_fee )
+      max_fee_128 *= scale;
+      max_fee_128 /= GRAPHENE_100_PERCENT;
+      auto max_fee_64 = max_fee_128.to_uint64();
+      if( core_fee_required < min_fee_64 ) core_fee_required = min_fee_64;
+      if( core_fee_required > max_fee_64 ) core_fee_required = max_fee_64;
    }
    if( memo )
-      core_fee_required += calculate_data_fee( fc::raw::pack_size(memo), schedule.price_per_kbyte );
+   {
+      auto memo_fee_128 = fc::uint128( calculate_data_fee( fc::raw::pack_size(memo), schedule.price_per_kbyte ) );
+      memo_fee_128 *= scale;
+      memo_fee_128 /= GRAPHENE_100_PERCENT;
+      core_fee_required += memo_fee_128.to_uint64();
+   }
    return core_fee_required;
 }
 
