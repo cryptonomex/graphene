@@ -78,13 +78,21 @@ namespace graphene { namespace chain {
           */
          share_type pending_vested_fees;
          /**
-          * For the fees split in different ways
+          * Tracks the fees paid by this account which will be disseminated to network. See also @ref pending_fees
           */
-         share_type pre_split_fees_network;
-         share_type pre_split_fees_others;
-         share_type pre_split_vested_fees_others;
+         share_type pending_fees_to_network;
+         /**
+          * Tracks the fees paid by this account which will be disseminated to non-network parties.
+          * See also @ref pending_fees
+          */
+         share_type pending_fees_to_non_network;
+         /**
+          * Same as @ref pending_fees_to_non_network, except these fees will be paid out as pre-vested cash-back
+          * (immediately available for withdrawal) rather than requiring the normal vesting period.
+          */
+         share_type pending_vested_fees_to_non_network;
 
-         /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees
+         /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees and etc.
          void process_fees(const account_object& a, database& d) const;
 
          /**
@@ -93,7 +101,8 @@ namespace graphene { namespace chain {
          void pay_fee( share_type core_fee, share_type cashback_vesting_threshold );
 
          /**
-          * Pre-split core fees are paid into the account_statistics_object by this method
+          * Core fees which will split a fixed amount to network are paid into the account_statistics_object
+          * by this method
           */
          void pay_fee_pre_split_network( share_type core_fee, share_type cashback_vesting_threshold, share_type network_fee );
    };
@@ -399,6 +408,6 @@ FC_REFLECT_DERIVED( graphene::chain::account_statistics_object,
                     (total_core_in_orders)
                     (lifetime_fees_paid)
                     (pending_fees)(pending_vested_fees)
-                    (pre_split_fees_network)(pre_split_fees_others)(pre_split_vested_fees_others)
+                    (pending_fees_to_network)(pending_fees_to_non_network)(pending_vested_fees_to_non_network)
                   )
 
