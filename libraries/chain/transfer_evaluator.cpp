@@ -175,7 +175,10 @@ void transfer_v2_evaluator::pay_fee( const transfer_v2_operation& o )
       {
          const auto& params = d.current_fee_schedule().find_op_fee_parameters( o );
          const auto& param = params.get<transfer_v2_operation::fee_parameters_type>();
-         s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, param.percentage_min_fee );
+         auto scaled_min_fee = fc::uint128( param.percentage_min_fee );
+         scaled_min_fee *= d.current_fee_schedule().scale;
+         scaled_min_fee /= GRAPHENE_100_PERCENT;
+         s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, scaled_min_fee.to_uint64() );
       }
    });
 } FC_CAPTURE_AND_RETHROW( (o) ) }
