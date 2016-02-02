@@ -173,8 +173,9 @@ void transfer_v2_evaluator::pay_fee( const transfer_v2_operation& o )
       }
       else if( fee_mode == asset_transfer_fee_mode_percentage_simple )
       {
-         auto& params = d.current_fee_schedule().get<transfer_v2_operation::fee_parameters_type>();
-         s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, params.percentage_min_fee );
+         const auto& params = d.current_fee_schedule().find_op_fee_parameters( o );
+         const auto& param = params.get<transfer_v2_operation::fee_parameters_type>();
+         s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, param.percentage_min_fee );
       }
    });
 } FC_CAPTURE_AND_RETHROW( (o) ) }
