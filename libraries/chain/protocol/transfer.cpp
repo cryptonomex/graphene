@@ -83,11 +83,11 @@ share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& sche
       core_fee_amount *= schedule.percentage;
       core_fee_amount /= GRAPHENE_100_PERCENT;
       core_fee_required = core_fee_amount.to_uint64();
-      auto min_fee_128 = fc::uint128( schedule.percentage_min_fee )
+      auto min_fee_128 = fc::uint128( schedule.percentage_min_fee );
       min_fee_128 *= scale;
       min_fee_128 /= GRAPHENE_100_PERCENT;
       auto min_fee_64 = min_fee_128.to_uint64();
-      auto max_fee_128 = fc::uint128( schedule.percentage_max_fee )
+      auto max_fee_128 = fc::uint128( schedule.percentage_max_fee );
       max_fee_128 *= scale;
       max_fee_128 /= GRAPHENE_100_PERCENT;
       auto max_fee_64 = max_fee_128.to_uint64();
