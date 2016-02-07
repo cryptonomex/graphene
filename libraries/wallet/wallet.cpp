@@ -3445,6 +3445,9 @@ vector< signed_transaction > wallet_api_impl::import_balance( string name_or_id,
          FC_ASSERT( key.valid(), "Invalid private key" );
          addrs.push_back( key->get_public_key() );
          keys[addrs.back()] = *key;
+         pts_address pts( key->get_public_key() );
+         addrs.push_back( pts );
+         keys[addrs.back()] = *key;
       }
    }
 
