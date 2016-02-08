@@ -44,6 +44,13 @@ share_type cut_fee(share_type a, uint16_t p)
 
 bool account_object::is_authorized_asset(const asset_object& asset_obj, const database& d) const
 {
+   if( allowed_assets.valid() )
+   {
+      if( allowed_assets->find( asset_obj.id ) == allowed_assets->end() )
+         return false;
+      // must still pass other checks even if it is in allowed_assets
+   }
+
    if( d.head_block_time() > HARDFORK_416_TIME )
    {
       if( !(asset_obj.options.flags & white_list) )
