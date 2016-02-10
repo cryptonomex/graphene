@@ -44,4 +44,15 @@ void committee_member_update_global_parameters_operation::validate() const
    new_parameters.validate();
 }
 
+void committee_member_update_core_asset_operation::validate() const
+{
+   // Validate fee field
+   FC_ASSERT( fee.amount >= 0 );
+   // Validate market_fee_percent and max_market_fee in new_options
+   FC_ASSERT( new_options.market_fee_percent <= GRAPHENE_100_PERCENT );
+   FC_ASSERT( new_options.max_market_fee >= 0 && new_options.max_market_fee <= GRAPHENE_MAX_SHARE_SUPPLY );
+   // extensions::transfer_fee_mode in new_options doesn't need to be validated.
+   // Other fields in new_options will be ignored, so don't need to be validated.
+}
+
 } } // graphene::chain

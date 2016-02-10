@@ -86,15 +86,15 @@ void_result transfer_v2_evaluator::do_evaluate( const transfer_v2_operation& op 
 
    const database& d = db();
 
+   // #583 BSIP10 hard fork check
+   if( d.head_block_time() <= HARDFORK_583_TIME )
+      FC_THROW( "Operation requires hardfork #583" );
+
    const account_object& from_account    = op.from(d);
    const account_object& to_account      = op.to(d);
    const asset_object&   asset_type      = op.amount.asset_id(d);
 
    try {
-
-      // #583 BSIP10 hard fork check
-      if( d.head_block_time() <= HARDFORK_583_TIME )
-         FC_THROW( "Operation requires hardfork #583" );
 
       GRAPHENE_ASSERT(
          is_authorized_asset( d, from_account, asset_type ),
