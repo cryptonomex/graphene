@@ -169,5 +169,25 @@ asset_transfer_fee_mode asset_object::get_transfer_fee_mode() const
             return e.get<asset_options::ext::transfer_fee_mode_options>().transfer_fee_mode;
       }
    }
-   return asset_transfer_fee_mode_flat;
+   return GRAPHENE_DEFAULT_TRANSFER_FEE_MODE;
+}
+
+void asset_object::set_transfer_fee_mode(const asset_transfer_fee_mode new_mode)
+{
+   // firstly look for fee mode in options, if found, change it
+   for( asset_options::future_extensions& e : options.extensions )
+   {
+      if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_mode_options>::value )
+      {
+         e.get<asset_options::ext::transfer_fee_mode_options>().transfer_fee_mode = new_mode;
+         return;
+      }
+   }
+   // if not found, add it
+   if( new_mode == GRAPHENE_DEFAULT_TRANSFER_FEE_MODE )
+      return;
+   struct asset_options::ext::transfer_fee_mode_options new_options;
+   new_options.transfer_fee_mode = new_mode;
+   asset_options::future_extensions e = new_options;
+   options.extensions.emplace_hint( options.extensions.end(), e );
 }
