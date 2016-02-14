@@ -22,6 +22,7 @@
  * THE SOFTWARE.
  */
 #pragma once
+#include <graphene/chain/hardfork.hpp>
 #include <graphene/chain/protocol/operations.hpp>
 #include <graphene/db/generic_index.hpp>
 #include <boost/multi_index/composite_key.hpp>
@@ -78,6 +79,19 @@ namespace graphene { namespace chain {
           */
          share_type pending_vested_fees;
 
+         /**
+          * Tracks the coin-seconds earned by this account. Lazy updating.
+          * actual_coin_seconds_earned = coin_seconds_earned + current_balance * (now - coin_seconds_earned_last_update)
+          */
+         // TODO maybe better to use a struct to store coin_seconds_earned and coin_seconds_earned_last_update
+         //      and related functions e.g. compute_coin_seconds_earned and update_coin_seconds_earned
+         fc::uint128_t                  coin_seconds_earned;
+
+         /**
+          * Tracks the most recent time when @ref coin_seconds_earned was updated.
+          */
+         fc::time_point_sec             coin_seconds_earned_last_update = HARDFORK_603_TIME;
+
          /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees
          void process_fees(const account_object& a, database& d) const;
 
@@ -85,6 +99,28 @@ namespace graphene { namespace chain {
           * Core fees are paid into the account_statistics_object by this method
           */
          void pay_fee( share_type core_fee, share_type cashback_vesting_threshold );
+
+         /**
+          * Compute coin_seconds_earned.  Used to
+          * non-destructively figure out how many coin seconds
+          * are available.
+          */
+         // TODO use a public funtion to do this job as well as same job in vesting_balance_object
+         fc::uint128_t compute_coin_seconds_earned(const asset& balance, fc::time_point_sec now)const;
+
+         /**
+          * Update coin_seconds_earned and
+          * coin_seconds_earned_last_update fields due to passing of time
+          */
+         // TODO use a public funtion to do this job and same job in vesting_balance_object
+         void update_coin_seconds_earned(const asset& balance, fc::time_point_sec now);
+
+         /**
+          * Update coin_seconds_earned and
+          * coin_seconds_earned_last_update fields with new data
+          */
+         void set_coin_seconds_earned(const fc::uint128_t new_coin_seconds, fc::time_point_sec now);
+
    };
 
    /**
@@ -257,6 +293,13 @@ namespace graphene { namespace chain {
          {
             return !is_basic_account(now);
          }
+         /// @return membership status of the account.
+         account_membership get_membership(time_point_sec now)const
+         {
+            if( is_basic_account( now ) ) return basic_account;
+            if( is_lifetime_member() ) return lifetime_member;
+            return annual_member;
+         }
 
          account_id_type get_id()const { return id; }
    };
@@ -388,5 +431,6 @@ FC_REFLECT_DERIVED( graphene::chain::account_statistics_object,
                     (total_core_in_orders)
                     (lifetime_fees_paid)
                     (pending_fees)(pending_vested_fees)
+                    (coin_seconds_earned)(coin_seconds_earned_last_update)
                   )
 
