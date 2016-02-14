@@ -119,7 +119,7 @@ namespace graphene { namespace chain {
       void validate()const;
 
       /** @return the coin_seconds_as_fee_options object set in extensions, or default values if not set */
-      ext::coin_seconds_as_fees_options& get_coin_seconds_as_fees_options()const
+      const ext::coin_seconds_as_fees_options get_coin_seconds_as_fees_options()const
       {
          if( extensions.size() > 0 )
          {

@@ -76,14 +76,14 @@ void database::adjust_balance(account_id_type account, asset delta )
          b.adjust_balance(delta);
       });
       // Update coin_seconds_earned and etc
-      if( d.head_block_time() > HARDFORK_FREE_TRX_TIME )
+      if( head_block_time() > HARDFORK_FREE_TRX_TIME )
       {
          // TODO how to deal with smart coins?
          if( delta.asset_id == asset_id_type() )
          {
-            d.modify( account(d).statistics(d), [&](account_statistics_object& s) {
+            modify( account(*this).statistics(*this), [&](account_statistics_object& s) {
                //TODO will coin_seconds_earned expire? seems hard to calculate
-               s.update_coin_seconds_earned( original_balance, d.head_block_time() );
+               s.update_coin_seconds_earned( original_balance, head_block_time() );
             });
          }
       }
