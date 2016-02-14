@@ -106,6 +106,13 @@ namespace graphene { namespace chain {
       asset_transfer_fee_mode_percentage_simple = 1
    };
 
+   enum account_membership
+   {
+      basic_account   = 0,
+      lifetime_member = 1,
+      annual_member   = 2
+   };
+
    enum reserved_spaces
    {
       relative_protocol_ids = 0,
@@ -414,4 +421,10 @@ FC_REFLECT_ENUM( graphene::chain::asset_issuer_permission_flags,
 FC_REFLECT_ENUM( graphene::chain::asset_transfer_fee_mode,
    (asset_transfer_fee_mode_flat)
    (asset_transfer_fee_mode_percentage_simple)
+   )
+
+FC_REFLECT_ENUM( graphene::chain::account_membership,
+   (basic_account)
+   (lifetime_member)
+   (annual_member)
    )

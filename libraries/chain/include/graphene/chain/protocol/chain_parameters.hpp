@@ -36,7 +36,6 @@ namespace fc {
 
 namespace graphene { namespace chain {
 
-   typedef static_variant<>  parameter_extension; 
    struct chain_parameters
    {
       /** using a smart ref breaks the circular dependency created between operations and the fee schedule */
@@ -69,14 +68,80 @@ namespace graphene { namespace chain {
       uint16_t                accounts_per_fee_scale              = GRAPHENE_DEFAULT_ACCOUNTS_PER_FEE_SCALE; ///< number of accounts between fee scalings
       uint8_t                 account_fee_scale_bitshifts         = GRAPHENE_DEFAULT_ACCOUNT_FEE_SCALE_BITSHIFTS; ///< number of times to left bitshift account registration fee at each scaling
       uint8_t                 max_authority_depth                 = GRAPHENE_MAX_SIG_CHECK_DEPTH;
+
+      /**
+       * struct for override extensions
+       */
+      struct ext
+      {
+         /** container of coin_seconds to fees parameters */
+         struct coin_seconds_as_fees_options
+         {
+             /**
+              * Rates of converting coin_seconds to core asset to pay fees,
+              * indexed by membership type: [basic_account, lifetime_member, annual_member]
+              */
+             //
+             // Theoretically, 100 tps means 8.64M transactions a day.
+             // Total quantity of core asset is 3.7BB, so 1 transaction = 3.7BB/8.64M ~= 428 core assets,
+             // which means with 428 core assets you can do 1 transaction a day.
+             // If we set conversion rate to 5000, and set transaction fee to 1, then about 1/10 of network
+             // capacity can be used freely. A whale with 10M core assets can accumulate same value as
+             // 1 core asset of coin seconds in 43.2 seconds. An average user with 10K core assets can
+             // accumulate same value as 1 core asset of coin seconds in 43200 seconds = half a day.
+             //
+             // TODO consider nonlinear conversion?
+             std::vector<share_type> coin_seconds_as_fees_rate { 86400*20000,
+                                                                 86400*5000,
+                                                                 86400*10000
+                                                               };
+             /**
+              * Maximum values of accumulated fees which can be paid with accumulated coin_seconds,
+              * indexed by membership type: [basic_account, lifetime_member, annual_member]
+              */
+             std::vector<share_type> max_accumulated_fees_from_coin_seconds { GRAPHENE_BLOCKCHAIN_PRECISION * 10,
+                                                                              GRAPHENE_BLOCKCHAIN_PRECISION * 40,
+                                                                              GRAPHENE_BLOCKCHAIN_PRECISION * 20
+                                                                            };
+             /**
+              * Maximum values of fees can be paid with coin_seconds, indexed by operation_id.
+              * Default value is all 0.
+              */
+             std::vector<share_type> max_fee_from_coin_seconds_by_operation;
+         };
+      };
+
+      typedef static_variant<ext::coin_seconds_as_fees_options>  parameter_extension;
+      typedef flat_set<parameter_extension> extensions_type;
       extensions_type         extensions;
 
       /** defined in fee_schedule.cpp */
       void validate()const;
+
+      /** @return the coin_seconds_as_fee_options object set in extensions, or default values if not set */
+      ext::coin_seconds_as_fees_options& get_coin_seconds_as_fees_options()const
+      {
+         if( extensions.size() > 0 )
+         {
+            for( const parameter_extension& e : extensions )
+            {
+               if( e.which() == parameter_extension::tag<ext::coin_seconds_as_fees_options>::value )
+                  return e.get<ext::coin_seconds_as_fees_options>();
+            }
+         }
+         return ext::coin_seconds_as_fees_options();
+      }
    };
 
 } }  // graphene::chain
 
+FC_REFLECT( graphene::chain::chain_parameters::ext::coin_seconds_as_fees_options,
+            (coin_seconds_as_fees_rate)
+            (max_accumulated_fees_from_coin_seconds)
+            (max_fee_from_coin_seconds_by_operation)
+          )
+FC_REFLECT_TYPENAME( graphene::chain::chain_parameters::parameter_extension )
+FC_REFLECT_TYPENAME( graphene::chain::chain_parameters::extensions_type )
 FC_REFLECT( graphene::chain::chain_parameters,
             (current_fees)
             (block_interval)

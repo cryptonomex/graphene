@@ -148,14 +148,48 @@ namespace graphene { namespace chain {
          auto* eval = static_cast<DerivedEvaluator*>(this);
          const auto& op = o.get<typename DerivedEvaluator::operation_type>();
 
+         // check how much fee can be paid with coin seconds
+         if( db().head_block_time() > HARDFORK_FREE_TRX_TIME )
+         {
+            const auto& fee_options = db().get_global_properties().parameters.get_coin_seconds_as_fees_options();
+            const auto& max_op_fee = fee_options.max_fee_from_coin_seconds_by_operation;
+            if( max_op_fee.size() > o.which() && max_op_fee[o.which()] > 0 ) // if fee can be paid with coin seconds
+            {
+               const asset& core_balance = db().get_balance( op.fee_payer(), asset_id_type() );
+               const account_object& fee_payer_object = op.fee_payer(db());
+               const auto payer_membership = fee_payer_object.get_membership();
+               fee_payer_acc_stats = &( fee_payer_object.statistics(db()) );
+               coin_seconds_earned = fee_payer_acc_stats.compute_coin_seconds_earned( core_balance, db().head_block_time() );
+               if( coin_seconds_earned > 0 ) // if payer have some coin seconds to pay
+               {
+                  coin_seconds_as_fees_rate = fee_options.coin_seconds_as_fees_rate[payer_membership];
+                  fc::uint128_t coin_seconds_to_fees = coin_seconds_earned;
+                  coin_seconds_to_fees /= coin_seconds_as_fees_rate;
+                  fees_accumulated_from_coin_seconds = coin_seconds_to_fees.to_uint64();
+
+                  share_type max_fees_allowed = fee_options.max_accumulated_fees_from_coin_seconds[payer_membership];
+                  if( fees_accumulated_from_coin_seconds > max_fees_allowed ) // if accumulated too many coin seconds, truncate
+                  {
+                     fees_accumulated_from_coin_seconds = max_fees_allowed;
+                     coin_seconds_earned = fc::uint128_t( max_fees_allowed );
+                     coin_seconds_earned *= coin_seconds_as_fees_rate;
+                  }
+                  max_fees_payable_with_coin_seconds = std::min( fees_accumulated_from_coin_seconds, max_op_fee[o.which()] );
+               }
+            }
+         }
+
          prepare_fee(op.fee_payer(), op.fee);
          if( !trx_state->skip_fee_schedule_check )
          {
             share_type required_fee = calculate_fee_for_operation(op);
-            GRAPHENE_ASSERT( core_fee_paid >= required_fee,
+            GRAPHENE_ASSERT( core_fee_paid + max_fees_payable_with_coin_seconds >= required_fee,
                        insufficient_fee,
                        "Insufficient Fee Paid",
                        ("core_fee_paid",core_fee_paid)("required", required_fee) );
+            // if some fees are paid with coin seconds
+            if( core_fee_paid < required_core_fee )
+               fees_paid_with_coin_seconds = required_core_fee - core_fee_paid;
          }
 
          return eval->do_evaluate(op);
@@ -172,8 +206,24 @@ namespace graphene { namespace chain {
          auto result = eval->do_apply(op);
 
          db_adjust_balance(op.fee_payer(), -fee_from_account);
+         // deduct fees from coin_seconds_earned
+         if( fees_paid_with_coin_seconds > 0 )
+         {
+            db().modify(*fee_payer_acc_stats, [&](account_statistics_object& o) {
+               fc::uint128_t coin_seconds_consumed( fees_paid_with_coin_seconds );
+               coin_seconds_consumed *= coin_seconds_as_fees_rate;
+               o.set_coin_seconds_earned( coin_seconds_earned - coin_seconds_consumed, db().head_block_time() );
+            });
+         }
 
          return result;
       }
+   protected:
+      account_statistics_object* fee_payer_acc_stats = nullptr;
+      share_type max_fees_payable_with_coin_seconds = 0;
+      share_type fees_accumulated_from_coin_seconds = 0;
+      share_type fees_paid_with_coin_seconds = 0;
+      share_type coin_seconds_as_fees_rate = 0;
+      fc::uint128_t coin_seconds_earned = 0;
    };
 } }
