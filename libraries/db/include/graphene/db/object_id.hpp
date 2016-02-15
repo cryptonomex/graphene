@@ -53,10 +53,11 @@ namespace graphene { namespace db {
       bool     is_null()const { return number == 0; }
       explicit operator uint64_t()const { return number; }
 
-      friend bool  operator == ( const object_id_type& a, const object_id_type& b )
-      {
-         return a.number == b.number;
-      }
+      friend bool  operator == ( const object_id_type& a, const object_id_type& b ) { return a.number == b.number; }
+      friend bool  operator != ( const object_id_type& a, const object_id_type& b ) { return a.number != b.number; }
+      friend bool  operator < ( const object_id_type& a, const object_id_type& b ) { return a.number < b.number; }
+      friend bool  operator > ( const object_id_type& a, const object_id_type& b ) { return a.number > b.number; }
+
       object_id_type& operator++(int) { ++number; return *this; }
       object_id_type& operator++()    { ++number; return *this; }
 
@@ -68,10 +69,6 @@ namespace graphene { namespace db {
       }
       friend size_t hash_value( object_id_type v ) { return std::hash<uint64_t>()(v.number); }
 
-      friend bool  operator < ( const object_id_type& a, const object_id_type& b )
-      {
-         return a.number < b.number;
-      }
 
       template< typename T >
       bool is() const
@@ -123,22 +120,12 @@ namespace graphene { namespace db {
       template<typename DB>
       const T& operator()(const DB& db)const { return db.get(*this); }
 
-      friend bool  operator != ( const object_id& a, const object_id& b )
-      {
-         return a.instance != b.instance;
-      }
-      friend bool  operator == ( const object_id& a, const object_id& b )
-      {
-         return a.instance == b.instance;
-      }
-      friend bool  operator == ( const object_id_type& a, const object_id& b )
-      {
-         return a == object_id_type(b);
-      }
-      friend bool  operator == ( const object_id& b, const object_id_type& a )
-      {
-         return a == object_id_type(b);
-      }
+      friend bool  operator == ( const object_id& a, const object_id& b ) { return a.instance == b.instance; }
+      friend bool  operator != ( const object_id& a, const object_id& b ) { return a.instance != b.instance; }
+      friend bool  operator == ( const object_id_type& a, const object_id& b ) { return a == object_id_type(b); }
+      friend bool  operator != ( const object_id_type& a, const object_id& b ) { return a != object_id_type(b); }
+      friend bool  operator == ( const object_id& b, const object_id_type& a ) { return a == object_id_type(b); }
+      friend bool  operator != ( const object_id& b, const object_id_type& a ) { return a != object_id_type(b); }
       friend bool  operator < ( const object_id& a, const object_id& b )
       {
          return a.instance.value < b.instance.value;
