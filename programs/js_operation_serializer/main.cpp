@@ -143,7 +143,7 @@ struct js_name< std::map<K,V> > { static std::string name(){ return "map (" + js
 template<typename K, typename V>
 struct js_name< fc::flat_map<K,V> > { static std::string name(){ return "map (" + js_name<K>::name() + "), (" + js_name<V>::name() +")"; } };
 
-template<typename T> struct js_name< graphene::chain::extension<T> > { static std::string name(){ return "extension " + js_name<T>::name(); } };
+template<typename T> struct js_name< graphene::chain::extension<T> > { static std::string name(){ return js_name<T>::name(); } };
 
 template<typename... T> struct js_sv_name;
 
@@ -333,19 +333,44 @@ struct serializer< fc::static_variant<>, false >
    }
 };
 
-struct graphene_extension_serializer_visitor
+template< typename T >
+struct unwrap_optional
 {
-   graphene_extension_serializer_visitor() {}
+   //static_assert( false, "trying to unwrap something not an optional" );
+   typedef void value_type;
+};
+
+template< typename T >
+struct unwrap_optional< fc::optional<T> >
+{
+   typedef T value_type;
+};
+
+struct graphene_extension_serializer_init_visitor
+{
+   graphene_extension_serializer_init_visitor() {}
 
    template<typename Member, class Class, Member (Class::*member)>
    void operator()( const char* name )const
    {
-      std::cout << "    " << name << ": " << js_name<Member>::name() << "\n";
+      serializer< typename unwrap_optional< Member >::value_type >::init();
    }
 };
 
-template< typename T >
-struct serializer< extension<T>, false >
+struct graphene_extension_serializer_generate_visitor
+{
+   graphene_extension_serializer_generate_visitor() {}
+
+   template<typename Member, class Class, Member (Class::*member)>
+   void operator()( const char* name )const
+   {
+      ilog( "name: ${name}", ("name", name) );
+      std::cout << "    [\"" << name << "\", " << js_name< typename unwrap_optional< Member >::value_type >::name() << "]\n";
+   }
+};
+
+template< typename T, bool reflected >
+struct serializer< extension<T>, reflected >
 {
    static void init()
    {
@@ -353,6 +378,7 @@ struct serializer< extension<T>, false >
       if( !init )
       {
          init = true;
+         fc::reflector<T>::visit( graphene_extension_serializer_init_visitor() );
          register_serializer( js_name< extension<T> >::name(), [=](){ generate(); } );
       }
    }
@@ -362,11 +388,13 @@ struct serializer< extension<T>, false >
       auto name = remove_namespace( js_name<T>::name() );
       std::cout << "" << name
                 << " = new Serializer( \n"
-                << "    \"" + name + "\"\n";
+                << "    \"" + name + "\"\n"
+                << "    extension [\n";
 
-      fc::reflector<T>::visit( graphene_extension_serializer_visitor() );
+      fc::reflector<T>::visit( graphene_extension_serializer_generate_visitor() );
 
-      std::cout <<")\n\n";
+      std::cout << "    ]"
+                   ")\n\n";
       return;
    }
 };
