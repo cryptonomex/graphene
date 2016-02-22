@@ -22,6 +22,8 @@
  * THE SOFTWARE.
  */
 
+#include <fc/crypto/hex.hpp>
+
 #include <fc/smart_ref_impl.hpp>
 #include <fc/uint128.hpp>
 
@@ -858,6 +860,9 @@ BOOST_AUTO_TEST_CASE( stealth_fba_test )
          sign( tx, philbin_private_key );
          sign( tx, tom_private_key );
 
+         ilog( "transaction_object=${tx}", ("tx", tx) );
+         ilog( "transaction_hex=${hex}", ("hex", fc::to_hex(fc::raw::pack(tx))) );
+
          processed_transaction ptx = PUSH_TX( db, tx );
          rex_id = ptx.operation_results.back().get< object_id_type >();
       }
@@ -883,6 +888,9 @@ BOOST_AUTO_TEST_CASE( stealth_fba_test )
 
          set_expiration( db, tx );
          sign( tx, tom_private_key );
+
+         ilog( "transaction_object=${tx}", ("tx", tx) );
+         ilog( "transaction_hex=${hex}", ("hex", fc::to_hex(fc::raw::pack(tx))) );
 
          PUSH_TX( db, tx );
       }

@@ -42,6 +42,7 @@
 #include <graphene/utilities/tempdir.hpp>
 
 #include <fc/crypto/digest.hpp>
+#include <fc/crypto/hex.hpp>
 
 #include "../common/database_fixture.hpp"
 
@@ -1376,6 +1377,9 @@ BOOST_AUTO_TEST_CASE( top_n_special )
             set_expiration( db, tx );
             sign( tx, stan_private_key );
 
+            ilog( "transaction_object=${tx}", ("tx", tx) );
+            ilog( "transaction_hex=${hex}", ("hex", fc::to_hex(fc::raw::pack(tx))) );
+
             PUSH_TX( db, tx );
 
             // TODO:  Check special_authority is properly set
@@ -1537,6 +1541,9 @@ BOOST_AUTO_TEST_CASE( buyback )
             // Izzy didn't sign
             GRAPHENE_CHECK_THROW( db.push_transaction(tx), tx_missing_active_auth );
             sign( tx, izzy_private_key );
+
+            ilog( "transaction_object=${tx}", ("tx", tx) );
+            ilog( "transaction_hex=${hex}", ("hex", fc::to_hex(fc::raw::pack(tx))) );
 
             // OK
             processed_transaction ptx = db.push_transaction( tx );
