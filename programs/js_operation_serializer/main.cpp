@@ -143,6 +143,7 @@ struct js_name< std::map<K,V> > { static std::string name(){ return "map (" + js
 template<typename K, typename V>
 struct js_name< fc::flat_map<K,V> > { static std::string name(){ return "map (" + js_name<K>::name() + "), (" + js_name<V>::name() +")"; } };
 
+template<typename T> struct js_name< graphene::chain::extension<T> > { static std::string name(){ return "extension " + js_name<T>::name(); } };
 
 template<typename... T> struct js_sv_name;
 
@@ -332,6 +333,43 @@ struct serializer< fc::static_variant<>, false >
    }
 };
 
+struct graphene_extension_serializer_visitor
+{
+   graphene_extension_serializer_visitor() {}
+
+   template<typename Member, class Class, Member (Class::*member)>
+   void operator()( const char* name )const
+   {
+      std::cout << "    " << name << ": " << js_name<Member>::name() << "\n";
+   }
+};
+
+template< typename T >
+struct serializer< extension<T>, false >
+{
+   static void init()
+   {
+      static bool init = false;
+      if( !init )
+      {
+         init = true;
+         register_serializer( js_name< extension<T> >::name(), [=](){ generate(); } );
+      }
+   }
+
+   static void generate()
+   {
+      auto name = remove_namespace( js_name<T>::name() );
+      std::cout << "" << name
+                << " = new Serializer( \n"
+                << "    \"" + name + "\"\n";
+
+      fc::reflector<T>::visit( graphene_extension_serializer_visitor() );
+
+      std::cout <<")\n\n";
+      return;
+   }
+};
 
 class register_member_visitor
 {
@@ -393,6 +431,7 @@ int main( int argc, char** argv )
     detail_ns::js_name<worker_initializer>::name("worker_initializer");
     detail_ns::js_name<predicate>::name("predicate");
     detail_ns::js_name<vesting_policy_initializer>::name("vesting_policy_initializer");
+    detail_ns::js_name<special_authority>::name("special_authority");
     detail_ns::serializer<fee_parameters>::init();
     detail_ns::serializer<fee_schedule>::init();
     detail_ns::serializer<signed_block>::init();
