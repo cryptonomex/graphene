@@ -206,3 +206,5 @@ void to_variant( const graphene::chain::extension<T>& value, fc::variant& var )
 }
 
 } // fc
+
+FC_REFLECT_TEMPLATE( (typename T), graphene::chain::extension<T>, (value) )
