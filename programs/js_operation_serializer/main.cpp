@@ -388,13 +388,12 @@ struct serializer< extension<T>, reflected >
       auto name = remove_namespace( js_name<T>::name() );
       std::cout << "" << name
                 << " = new Serializer( \n"
-                << "    \"" + name + "\"\n"
-                << "    extension [\n";
+                << "  \"" + name + "\"\n"
+                << "  extension [\n";
 
       fc::reflector<T>::visit( graphene_extension_serializer_generate_visitor() );
 
-      std::cout << "    ]"
-                   ")\n\n";
+      std::cout << "  ]\n" << ")\n\n";
       return;
    }
 };
