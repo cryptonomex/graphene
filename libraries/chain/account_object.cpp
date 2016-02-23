@@ -57,35 +57,6 @@ share_type cut_fee(share_type a, uint16_t p, uint16_t t)
    return r.to_uint64();
 }
 
-bool account_object::is_authorized_asset(const asset_object& asset_obj, const database& d) const
-{
-   if( d.head_block_time() > HARDFORK_416_TIME )
-   {
-      if( !(asset_obj.options.flags & white_list) )
-         return true;
-   }
-
-   for( const auto id : blacklisting_accounts )
-   {
-      if( asset_obj.options.blacklist_authorities.find(id) != asset_obj.options.blacklist_authorities.end() )
-         return false;
-   }
-
-   if( d.head_block_time() > HARDFORK_415_TIME )
-   {
-      if( asset_obj.options.whitelist_authorities.size() == 0 )
-         return true;
-   }
-
-   for( const auto id : whitelisting_accounts )
-   {
-      if( asset_obj.options.whitelist_authorities.find(id) != asset_obj.options.whitelist_authorities.end() )
-         return true;
-   }
-
-   return false;
-}
-
 void account_balance_object::adjust_balance(const asset& delta)
 {
    assert(delta.asset_id == asset_type);
@@ -224,21 +195,6 @@ void account_statistics_object::pay_fee_pre_split_network( share_type core_fee,
       pending_fees_to_non_network += ( core_fee - new_network_fee );
    else
       pending_vested_fees_to_non_network += ( core_fee - new_network_fee );
-}
-
-void account_object::options_type::validate() const
-{
-   auto needed_witnesses = num_witness;
-   auto needed_committee = num_committee;
-
-   for( vote_id_type id : votes )
-      if( id.type() == vote_id_type::witness && needed_witnesses )
-         --needed_witnesses;
-      else if ( id.type() == vote_id_type::committee && needed_committee )
-         --needed_committee;
-
-   FC_ASSERT( needed_witnesses == 0 && needed_committee == 0,
-              "May not specify fewer witnesses or committee members than the number voted for.");
 }
 
 set<account_id_type> account_member_index::get_account_members(const account_object& a)const

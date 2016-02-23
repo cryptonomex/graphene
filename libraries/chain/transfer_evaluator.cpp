@@ -98,7 +98,6 @@ void_result transfer_v2_evaluator::do_evaluate( const transfer_v2_operation& op 
    const account_object& from_account    = op.from(d);
    const account_object& to_account      = op.to(d);
    const asset_object&   asset_type      = op.amount.asset_id(d);
-   const asset_object&   fee_asset_type  = op.fee.asset_id(d);
 
    try {
 
