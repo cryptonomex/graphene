@@ -148,6 +148,16 @@ namespace detail {
                                  std::vector<uint32_t>());
       } FC_CAPTURE_AND_RETHROW() }
 
+      void shutdown_p2p_network()
+      {
+         if( _p2p_network )
+         {
+            ilog( "shutting down p2p network" );
+            _p2p_network->close();
+            _p2p_network.reset();
+         }
+      }
+
       std::vector<fc::ip::endpoint> resolve_string_to_ip_endpoints(const std::string& endpoint_string)
       {
          try
@@ -246,6 +256,14 @@ namespace detail {
       { try {
          bool clean = !fc::exists(_data_dir / "blockchain/dblock");
          fc::create_directories(_data_dir / "blockchain/dblock");
+
+         if( _options->count("dbg-mode") )
+         {
+            ilog("Running with --dbg-mode enabled");
+            std::string dbg_mode_str = _options->at("dbg-mode").as<std::string>();
+            debug_mode dbg_mode = fc::json::from_string( dbg_mode_str ).as< debug_mode >();
+            _chain_db->setup_debug_mode( dbg_mode );
+         }
 
          auto initial_state = [&] {
             ilog("Initializing database...");
@@ -492,6 +510,15 @@ namespace detail {
                {
                   graphene::net::trx_message transaction_message(transaction);
                   contained_transaction_message_ids.push_back(graphene::net::message(transaction_message).id());
+               }
+            }
+
+            if( _chain_db->get_global_properties().in_debug_mode )
+            {
+               if( _p2p_network )
+               {
+                  ilog( "shutting down p2p network due to entering debug mode" );
+                  shutdown_p2p_network();
                }
             }
 
@@ -872,7 +899,7 @@ namespace detail {
       bool _is_finished_syncing = false;
    };
 
-}
+} // namespace detail
 
 application::application()
    : my(new detail::application_impl(this))
@@ -880,11 +907,7 @@ application::application()
 
 application::~application()
 {
-   if( my->_p2p_network )
-   {
-      my->_p2p_network->close();
-      my->_p2p_network.reset();
-   }
+   shutdown_p2p_network();
    if( my->_chain_db )
    {
       my->_chain_db->close();
@@ -905,6 +928,7 @@ void application::set_program_options(boost::program_options::options_descriptio
          ("genesis-json", bpo::value<boost::filesystem::path>(), "File to read Genesis State from")
          ("dbg-init-key", bpo::value<string>(), "Block signing key to use for init witnesses, overrides genesis file")
          ("api-access", bpo::value<boost::filesystem::path>(), "JSON file specifying API permissions")
+         ("dbg-mode", bpo::value<string>(), "Debug mode settings")
          ;
    command_line_options.add(configuration_file_options);
    command_line_options.add_options()
@@ -1033,5 +1057,9 @@ void application::startup_plugins()
    return;
 }
 
-// namespace detail
-} }
+void application::shutdown_p2p_network()
+{
+   my->shutdown_p2p_network();
+}
+
+} } // namespace graphene::chain

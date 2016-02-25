@@ -30,6 +30,7 @@
 #include <graphene/chain/block_database.hpp>
 #include <graphene/chain/genesis_state.hpp>
 #include <graphene/chain/evaluator.hpp>
+#include <graphene/chain/debug_mode.hpp>
 
 #include <graphene/db/object_database.hpp>
 #include <graphene/db/object.hpp>
@@ -322,6 +323,8 @@ namespace graphene { namespace chain {
          //////////////////// db_debug.cpp ////////////////////
 
          void debug_dump();
+         void setup_debug_mode( const debug_mode& dbg_mode );   // called to set up debug mode, e.g. during options handling at witness_node startup
+         void enter_debug_mode();   // called internally when debug mode block is reached
 
          //////////////////// db_market.cpp ////////////////////
 
@@ -485,6 +488,7 @@ namespace graphene { namespace chain {
          uint64_t                          _total_voting_stake;
 
          flat_map<uint32_t,block_id_type>  _checkpoints;
+         optional< debug_mode >            _debug_mode;
 
          node_property_object              _node_property_object;
    };

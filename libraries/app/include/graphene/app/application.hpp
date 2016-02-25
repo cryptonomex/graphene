@@ -49,6 +49,7 @@ namespace graphene { namespace app {
          void shutdown();
          void startup_plugins();
          void shutdown_plugins();
+         void shutdown_p2p_network();
 
          template<typename PluginType>
          std::shared_ptr<PluginType> register_plugin()

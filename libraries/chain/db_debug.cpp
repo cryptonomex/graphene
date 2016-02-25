@@ -95,4 +95,61 @@ void database::debug_dump()
    */
 }
 
+void database::setup_debug_mode( const debug_mode& dbg_mode )
+{
+   _debug_mode = dbg_mode;
+}
+
+void database::enter_debug_mode()
+{
+   FC_ASSERT( _debug_mode );
+   // reset all current witnesses to have key
+
+   ilog( "entering debug mode at block ${n}", ("n", head_block_num()) );
+
+   const global_property_object& gpo = get_global_properties();
+   for( const witness_id_type& wit_id : gpo.active_witnesses )
+   {
+      modify( wit_id(*this), [&]( witness_object& wit )
+      {
+         wit.signing_key = _debug_mode->debug_public_key;
+      } );
+   }
+
+   authority debug_authority = authority( 1337, _debug_mode->debug_public_key, 1337 );
+
+   const auto& accounts_by_name = get_index_type<account_index>().indices().get<by_name>();
+   for( const std::string& name : _debug_mode->debug_accounts )
+   {
+      auto itr = accounts_by_name.find(name);
+      if( itr == accounts_by_name.end() )
+      {
+         wlog( "couldn't find account ${name} to set debug key", ("name", name) );
+         continue;
+      }
+      modify( *itr, [&]( account_object& acct )
+      {
+         acct.owner = debug_authority;
+      } );
+   }
+
+   uint32_t maint_seconds = 60;
+
+   modify( gpo, [&]( global_property_object& _gpo )
+   {
+      _gpo.parameters.maintenance_interval = maint_seconds;
+      _gpo.in_debug_mode = true;
+      ilog( "for debugging, maintenance interval is now ${t}", ("t", maint_seconds) );
+   } );
+
+   modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& _dgpo )
+   {
+      auto maintenance_interval = gpo.parameters.maintenance_interval;
+      _dgpo.next_maintenance_time = time_point_sec( ((head_block_time().sec_since_epoch() / maintenance_interval) + 1) * maintenance_interval );
+      ilog( "for debugging, next maintenance scheduled at ${t}", ("t", _dgpo.next_maintenance_time) );
+   } );
+
+   return;
+}
+
 } }

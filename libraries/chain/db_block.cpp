@@ -533,6 +533,9 @@ void database::_apply_block( const signed_block& next_block )
    update_maintenance_flag( maint_needed );
    update_witness_schedule();
 
+   if( _debug_mode && (next_block_num == _debug_mode->debug_block_num) )
+      enter_debug_mode();
+
    // notify observers that the block has been applied
    applied_block( next_block ); //emit
    _applied_ops.clear();
