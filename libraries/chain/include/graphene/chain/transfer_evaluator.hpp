@@ -35,6 +35,9 @@ namespace graphene { namespace chain {
 
          void_result do_evaluate( const transfer_operation& o );
          void_result do_apply( const transfer_operation& o );
+      protected:
+         /** override to call extended calculate_fee function */
+         share_type calculate_fee_for_operation( const operation& op ) const override;
    };
 
    class transfer_v2_evaluator : public evaluator<transfer_v2_evaluator>
@@ -45,8 +48,10 @@ namespace graphene { namespace chain {
          void_result do_evaluate( const transfer_v2_operation& o );
          void_result do_apply( const transfer_v2_operation& o );
 
-      private:
-         void pay_fee( const transfer_v2_operation& o );
+      protected:
+         virtual void pay_fee( const operation& op ) override;
+         /** override to call extended calculate_fee function */
+         share_type calculate_fee_for_operation( const operation& op ) const override;
    };
 
    class override_transfer_evaluator : public evaluator<override_transfer_evaluator>

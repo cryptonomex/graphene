@@ -39,15 +39,6 @@ void_result transfer_evaluator::do_evaluate( const transfer_operation& op )
 
    try {
 
-      if( !trx_state->skip_fee_schedule_check )
-      {
-         share_type required_core_fee = d.current_fee_schedule().calculate_fee( op, asset_type ).amount;
-         GRAPHENE_ASSERT( core_fee_paid >= required_core_fee,
-                    insufficient_fee,
-                    "Insufficient Fee Paid",
-                    ("core_fee_paid",core_fee_paid)("required",required_core_fee) );
-      }
-
       GRAPHENE_ASSERT(
          is_authorized_asset( d, from_account, asset_type ),
          transfer_from_account_not_whitelisted,
@@ -90,6 +81,12 @@ void_result transfer_evaluator::do_apply( const transfer_operation& o )
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
 
+share_type transfer_evaluator::calculate_fee_for_operation( const operation& op ) const
+{
+   const transfer_operation& o = op.get<transfer_operation>();
+   return db().current_fee_schedule().calculate_fee( op, o.amount.asset_id( db() ) ).amount;
+}
+
 void_result transfer_v2_evaluator::do_evaluate( const transfer_v2_operation& op )
 { try {
 
@@ -104,15 +101,6 @@ void_result transfer_v2_evaluator::do_evaluate( const transfer_v2_operation& op 
       // #583 BSIP10 hard fork check
       if( d.head_block_time() <= HARDFORK_583_TIME )
          FC_THROW( "Operation requires hardfork #583" );
-
-      if( !trx_state->skip_fee_schedule_check )
-      {
-         share_type required_core_fee = d.current_fee_schedule().calculate_fee( op, asset_type ).amount;
-         GRAPHENE_ASSERT( core_fee_paid >= required_core_fee,
-                    insufficient_fee,
-                    "Insufficient Fee Paid",
-                    ("core_fee_paid",core_fee_paid)("required",required_core_fee) );
-      }
 
       GRAPHENE_ASSERT(
          is_authorized_asset( d, from_account, asset_type ),
@@ -151,36 +139,44 @@ void_result transfer_v2_evaluator::do_evaluate( const transfer_v2_operation& op 
 
 void_result transfer_v2_evaluator::do_apply( const transfer_v2_operation& o )
 { try {
-   pay_fee( o );
    db().adjust_balance( o.from, -o.amount );
    db().adjust_balance( o.to, o.amount );
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
 
 
-void transfer_v2_evaluator::pay_fee( const transfer_v2_operation& o )
+void transfer_v2_evaluator::pay_fee( const operation& op )
 { try {
-   database& d = db();
-   const asset_object&   asset_type      = o.amount.asset_id(d);
-   d.modify(*fee_paying_account_statistics, [&](account_statistics_object& s)
-   {
-      auto vesting_threshold = d.get_global_properties().parameters.cashback_vesting_threshold;
-      auto fee_mode = asset_type.get_transfer_fee_mode();
-      if( fee_mode == asset_transfer_fee_mode_flat )
+   if( !trx_state->skip_fee ) {
+      const transfer_v2_operation& o = op.get<transfer_v2_operation>();
+      database& d = db();
+      const asset_object&   asset_type      = o.amount.asset_id(d);
+      d.modify(*fee_paying_account_statistics, [&](account_statistics_object& s)
       {
-         s.pay_fee( core_fee_paid, vesting_threshold );
-      }
-      else if( fee_mode == asset_transfer_fee_mode_percentage_simple )
-      {
-         const auto& params = d.current_fee_schedule().find_op_fee_parameters( o );
-         const auto& param = params.get<transfer_v2_operation::fee_parameters_type>();
-         auto scaled_min_fee = fc::uint128( param.percentage_min_fee );
-         scaled_min_fee *= d.current_fee_schedule().scale;
-         scaled_min_fee /= GRAPHENE_100_PERCENT;
-         s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, scaled_min_fee.to_uint64() );
-      }
-   });
-} FC_CAPTURE_AND_RETHROW( (o) ) }
+         auto vesting_threshold = d.get_global_properties().parameters.cashback_vesting_threshold;
+         auto fee_mode = asset_type.get_transfer_fee_mode();
+         if( fee_mode == asset_transfer_fee_mode_flat )
+         {
+            s.pay_fee( core_fee_paid, vesting_threshold );
+         }
+         else if( fee_mode == asset_transfer_fee_mode_percentage_simple )
+         {
+            const auto& params = d.current_fee_schedule().find_op_fee_parameters( o );
+            const auto& param = params.get<transfer_v2_operation::fee_parameters_type>();
+            auto scaled_min_fee = fc::uint128( param.percentage_min_fee );
+            scaled_min_fee *= d.current_fee_schedule().scale;
+            scaled_min_fee /= GRAPHENE_100_PERCENT;
+            s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, scaled_min_fee.to_uint64() );
+         }
+      });
+   }
+} FC_CAPTURE_AND_RETHROW( (op) ) }
+
+share_type transfer_v2_evaluator::calculate_fee_for_operation( const operation& op ) const
+{
+   const transfer_v2_operation& o = op.get<transfer_v2_operation>();
+   return db().current_fee_schedule().calculate_fee( op, o.amount.asset_id( db() ) ).amount;
+}
 
 void_result override_transfer_evaluator::do_evaluate( const override_transfer_operation& op )
 { try {

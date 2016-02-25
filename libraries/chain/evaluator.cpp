@@ -92,6 +92,11 @@ database& generic_evaluator::db()const { return trx_state->db(); }
       }
    }
 
+   void generic_evaluator::pay_fee( const operation& op )
+   {
+      pay_fee();
+   }
+
    void generic_evaluator::pay_fee()
    { try {
       if( !trx_state->skip_fee ) {

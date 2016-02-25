@@ -63,6 +63,8 @@ namespace graphene { namespace chain {
        * The default implementation simply calls account_statistics_object->pay_fee() to
        * increment pending_fees or pending_vested_fees.
        */
+      virtual void pay_fee(const operation& op);
+      /** Keep the function with no parameter here for backward compatibility */
       virtual void pay_fee();
 
       database& db()const;
@@ -105,7 +107,7 @@ namespace graphene { namespace chain {
       // the next two functions are helpers that allow template functions declared in this 
       // header to call db() without including database.hpp, which would
       // cause a circular dependency
-      share_type calculate_fee_for_operation(const operation& op) const;
+      virtual share_type calculate_fee_for_operation(const operation& op) const;
       void db_adjust_balance(const account_id_type& fee_payer, asset fee_from_account);
 
       asset                            fee_from_account;
@@ -149,16 +151,11 @@ namespace graphene { namespace chain {
          prepare_fee(op.fee_payer(), op.fee);
          if( !trx_state->skip_fee_schedule_check )
          {
-            // transfer_operation and transfer_v2_operation will check in do_evaluate(op)
-            if( o.which() != operation::tag<transfer_operation>::value
-                  && o.which() != operation::tag<transfer_v2_operation>::value )
-            {
-               share_type required_fee = calculate_fee_for_operation(op);
-               GRAPHENE_ASSERT( core_fee_paid >= required_fee,
+            share_type required_fee = calculate_fee_for_operation(op);
+            GRAPHENE_ASSERT( core_fee_paid >= required_fee,
                        insufficient_fee,
                        "Insufficient Fee Paid",
                        ("core_fee_paid",core_fee_paid)("required", required_fee) );
-            }
          }
 
          return eval->do_evaluate(op);
@@ -170,9 +167,7 @@ namespace graphene { namespace chain {
          const auto& op = o.get<typename DerivedEvaluator::operation_type>();
 
          convert_fee();
-         // transfer_v2_operation will pay fee in do_apply(op)
-         if( o.which() != operation::tag<transfer_v2_operation>::value )
-            pay_fee();
+         pay_fee(o);
 
          auto result = eval->do_apply(op);
 
