@@ -859,6 +859,8 @@ BOOST_AUTO_TEST_CASE( stealth_fba_test )
          sign( tx, philbin_private_key );
          sign( tx, tom_private_key );
 
+         ilog( "create buyback tx looks like this: ${tx}", ("tx", tx) );
+
          processed_transaction ptx = PUSH_TX( db, tx );
          rex_id = ptx.operation_results.back().get< object_id_type >();
       }
@@ -884,6 +886,8 @@ BOOST_AUTO_TEST_CASE( stealth_fba_test )
 
          set_expiration( db, tx );
          sign( tx, tom_private_key );
+
+         ilog( "set top_n authority tx looks like this: ${tx}", ("tx", tx) );
 
          PUSH_TX( db, tx );
       }
