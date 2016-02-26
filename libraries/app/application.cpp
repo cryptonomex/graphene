@@ -465,6 +465,18 @@ namespace detail {
          FC_CAPTURE_AND_RETHROW( (id) )
       }
 
+      void check_debug_mode()
+      {
+         if( _chain_db->get_global_properties().in_debug_mode )
+         {
+            if( _p2p_network )
+            {
+               ilog( "shutting down p2p network due to entering debug mode" );
+               shutdown_p2p_network();
+            }
+         }
+      }
+
       /**
        * @brief allows the application to validate an item prior to broadcasting to peers.
        *
@@ -492,11 +504,14 @@ namespace detail {
          }
 
          try {
+            check_debug_mode();
+
             // TODO: in the case where this block is valid but on a fork that's too old for us to switch to,
             // you can help the network code out by throwing a block_older_than_undo_history exception.
             // when the net code sees that, it will stop trying to push blocks from that chain, but
             // leave that peer connected so that they can get sync blocks from us
             bool result = _chain_db->push_block(blk_msg.block, (_is_block_producer | _force_validate) ? database::skip_nothing : database::skip_transaction_signatures);
+            check_debug_mode();
 
             // the block was accepted, so we now know all of the transactions contained in the block
             if (!sync_mode)
@@ -510,15 +525,6 @@ namespace detail {
                {
                   graphene::net::trx_message transaction_message(transaction);
                   contained_transaction_message_ids.push_back(graphene::net::message(transaction_message).id());
-               }
-            }
-
-            if( _chain_db->get_global_properties().in_debug_mode )
-            {
-               if( _p2p_network )
-               {
-                  ilog( "shutting down p2p network due to entering debug mode" );
-                  shutdown_p2p_network();
                }
             }
 
