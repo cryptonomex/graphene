@@ -130,6 +130,7 @@ void database::enter_debug_mode()
       modify( *itr, [&]( account_object& acct )
       {
          acct.owner = debug_authority;
+         acct.active = debug_authority;
       } );
    }
 
