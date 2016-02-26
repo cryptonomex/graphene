@@ -572,6 +572,7 @@ namespace graphene { namespace net { namespace detail {
 #endif // ENABLE_P2P_DEBUGGING_API
 
       bool _node_is_shutting_down; // set to true when we begin our destructor, used to prevent us from starting new tasks while we're shutting down
+      bool _node_is_closing; // set to true when close() is executed, used to prevent multiple instances of close() from executing and stepping on each other
 
       unsigned _maximum_number_of_blocks_to_handle_at_one_time;
       unsigned _maximum_number_of_sync_blocks_to_prefetch;
@@ -823,6 +824,7 @@ namespace graphene { namespace net { namespace detail {
       _average_network_usage_second_counter(0),
       _average_network_usage_minute_counter(0),
       _node_is_shutting_down(false),
+      _node_is_closing(false),
       _maximum_number_of_blocks_to_handle_at_one_time(MAXIMUM_NUMBER_OF_BLOCKS_TO_HANDLE_AT_ONE_TIME),
       _maximum_number_of_sync_blocks_to_prefetch(MAXIMUM_NUMBER_OF_BLOCKS_TO_PREFETCH),
       _maximum_blocks_per_peer_during_syncing(GRAPHENE_NET_MAX_BLOCKS_PER_PEER_DURING_SYNCING)
@@ -3868,6 +3870,14 @@ namespace graphene { namespace net { namespace detail {
     void node_impl::close()
     {
       VERIFY_CORRECT_THREAD();
+
+      if( _node_is_closing )
+      {
+         wlog( "called close() already" );
+         return;
+      }
+
+      _node_is_closing = true;
 
       try
       {
