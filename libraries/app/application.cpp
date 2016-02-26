@@ -152,9 +152,10 @@ namespace detail {
       {
          if( _p2p_network )
          {
-            ilog( "shutting down p2p network" );
-            _p2p_network->close();
+            std::shared_ptr<graphene::net::node> p2p_network = _p2p_network;
             _p2p_network.reset();
+            ilog( "shutting down p2p network" );
+            p2p_network->close();
          }
       }
 
