@@ -128,13 +128,15 @@ namespace graphene { namespace app {
     {
        trx.validate();
        _app.chain_database()->push_transaction(trx);
-       _app.p2p_node()->broadcast_transaction(trx);
+       if( _app.p2p_node() )
+          _app.p2p_node()->broadcast_transaction(trx);
     }
 
     void network_broadcast_api::broadcast_block( const signed_block& b )
     {
        _app.chain_database()->push_block(b);
-       _app.p2p_node()->broadcast( net::block_message( b ));
+       if( _app.p2p_node() )
+          _app.p2p_node()->broadcast( net::block_message( b ));
     }
 
     void network_broadcast_api::broadcast_transaction_with_callback(confirmation_callback cb, const signed_transaction& trx)
@@ -142,7 +144,8 @@ namespace graphene { namespace app {
        trx.validate();
        _callbacks[trx.id()] = cb;
        _app.chain_database()->push_transaction(trx);
-       _app.p2p_node()->broadcast_transaction(trx);
+       if( _app.p2p_node() )
+          _app.p2p_node()->broadcast_transaction(trx);
     }
 
     network_node_api::network_node_api( application& a ) : _app( a )
@@ -151,34 +154,46 @@ namespace graphene { namespace app {
 
     fc::variant_object network_node_api::get_info() const
     {
-       fc::mutable_variant_object result = _app.p2p_node()->network_get_info();
+       fc::mutable_variant_object result;
+       if( !_app.p2p_node() )
+          return result;
+
+       result = _app.p2p_node()->network_get_info();
        result["connection_count"] = _app.p2p_node()->get_connection_count();
        return result;
     }
 
     void network_node_api::add_node(const fc::ip::endpoint& ep)
     {
-       _app.p2p_node()->add_node(ep);
+       if( _app.p2p_node() )
+          _app.p2p_node()->add_node(ep);
     }
 
     std::vector<net::peer_status> network_node_api::get_connected_peers() const
     {
+       if( !_app.p2p_node() )
+          return std::vector<net::peer_status>();
        return _app.p2p_node()->get_connected_peers();
     }
 
     std::vector<net::potential_peer_record> network_node_api::get_potential_peers() const
     {
+       if( !_app.p2p_node() )
+          return std::vector<net::potential_peer_record>();
        return _app.p2p_node()->get_potential_peers();
     }
 
     fc::variant_object network_node_api::get_advanced_node_parameters() const
     {
+       if( !_app.p2p_node() )
+          return fc::variant_object();
        return _app.p2p_node()->get_advanced_node_parameters();
     }
 
     void network_node_api::set_advanced_node_parameters(const fc::variant_object& params)
     {
-       return _app.p2p_node()->set_advanced_node_parameters(params);
+       if( _app.p2p_node() )
+          _app.p2p_node()->set_advanced_node_parameters(params);
     }
 
     fc::api<network_broadcast_api> login_api::network_broadcast()const
