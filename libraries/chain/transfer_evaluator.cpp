@@ -81,12 +81,6 @@ void_result transfer_evaluator::do_apply( const transfer_operation& o )
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
 
-share_type transfer_evaluator::calculate_fee_for_operation( const operation& op ) const
-{
-   const transfer_operation& o = op.get<transfer_operation>();
-   return db().current_fee_schedule().calculate_fee( op, o.amount.asset_id( db() ) ).amount;
-}
-
 void_result transfer_v2_evaluator::do_evaluate( const transfer_v2_operation& op )
 { try {
 
@@ -171,12 +165,6 @@ void transfer_v2_evaluator::pay_fee( const operation& op )
       });
    }
 } FC_CAPTURE_AND_RETHROW( (op) ) }
-
-share_type transfer_v2_evaluator::calculate_fee_for_operation( const operation& op ) const
-{
-   const transfer_v2_operation& o = op.get<transfer_v2_operation>();
-   return db().current_fee_schedule().calculate_fee( op, o.amount.asset_id( db() ) ).amount;
-}
 
 void_result override_transfer_evaluator::do_evaluate( const override_transfer_operation& op )
 { try {

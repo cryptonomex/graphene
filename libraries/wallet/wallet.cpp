@@ -493,19 +493,26 @@ public:
       return ob.template as<T>();
    }
 
+   struct set_fee_visitor
+   {
+      typedef void result_type;
+      asset _fee;
+
+      set_fee_visitor( asset f ):_fee(f){}
+
+      template<typename OpType>
+      void operator()( OpType& op )const
+      {
+         op.fee = _fee;
+      }
+   };
+
    void set_operation_fees( signed_transaction& tx, const fee_schedule& s  )
    {
       for( auto& op : tx.operations )
       {
-         if( op.which() == operation::tag<transfer_v2_operation>::value )
-         {
-            s.set_fee( op, get_asset( op.get<transfer_v2_operation>().amount.asset_id ) );
-         }
-         else if( op.which() == operation::tag<transfer_operation>::value )
-         {
-            s.set_fee( op, get_asset( op.get<transfer_operation>().amount.asset_id ) );
-         }
-         else s.set_fee(op);
+         asset required_fee = _remote_db->get_operation_fee( op, asset_id_type(0) );
+         op.visit( set_fee_visitor( required_fee ) );
       }
    }
 
@@ -854,22 +861,9 @@ public:
       {
          for( auto& op : _builder_transactions[handle].operations )
          {
-            if( op.which() == operation::tag<transfer_v2_operation>::value )
-            {
-               total_fee += gprops.current_fees->set_fee( op,
-                               get_asset( op.get<transfer_v2_operation>().amount.asset_id ),
-                               fee_asset_obj.options.core_exchange_rate );
-            }
-            else if( op.which() == operation::tag<transfer_operation>::value )
-            {
-               total_fee += gprops.current_fees->set_fee( op,
-                               get_asset( op.get<transfer_operation>().amount.asset_id ),
-                               fee_asset_obj.options.core_exchange_rate );
-            }
-            else
-            {
-               total_fee += gprops.current_fees->set_fee( op, fee_asset_obj.options.core_exchange_rate );
-            }
+            asset required_fee = _remote_db->get_operation_fee( op, fee_asset_obj.id );
+            op.visit( set_fee_visitor( required_fee ) );
+            total_fee += required_fee;
          }
 
          FC_ASSERT((total_fee * fee_asset_obj.options.core_exchange_rate).amount <=
@@ -879,20 +873,9 @@ public:
       } else {
          for( auto& op : _builder_transactions[handle].operations )
          {
-            if( op.which() == operation::tag<transfer_v2_operation>::value )
-            {
-               total_fee += gprops.current_fees->set_fee( op,
-                               get_asset( op.get<transfer_v2_operation>().amount.asset_id ) );
-            }
-            else if( op.which() == operation::tag<transfer_operation>::value )
-            {
-               total_fee += gprops.current_fees->set_fee( op,
-                               get_asset( op.get<transfer_operation>().amount.asset_id ) );
-            }
-            else
-            {
-               total_fee += gprops.current_fees->set_fee( op );
-            }
+            asset required_fee = _remote_db->get_operation_fee( op, asset_id_type(0) );
+            op.visit( set_fee_visitor( required_fee ) );
+            total_fee += required_fee;
          }
       }
 
@@ -2036,6 +2019,38 @@ public:
          return sign_transaction(trx, broadcast);
    } FC_CAPTURE_AND_RETHROW((order_id)) }
 
+   template<typename T>
+   signed_transaction build_transfer_trx( account_id_type& from_id,
+                                          account_id_type& to_id,
+                                          account_object& from_account,
+                                          account_object& to_account,
+                                          string& amount,
+                                          fc::optional<asset_object>& asset_obj,
+                                          string& memo,
+                                          bool broadcast = false)
+   {
+         T xfer_op;
+         xfer_op.from = from_id;
+         xfer_op.to = to_id;
+         xfer_op.amount = asset_obj->amount_from_string(amount);
+
+         if( memo.size() )
+         {
+            xfer_op.memo = memo_data();
+            xfer_op.memo->from = from_account.options.memo_key;
+            xfer_op.memo->to = to_account.options.memo_key;
+            xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
+                                      to_account.options.memo_key, memo);
+         }
+
+         signed_transaction tx;
+         tx.operations.push_back(xfer_op);
+         set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
+         tx.validate();
+
+         return sign_transaction(tx, broadcast);
+   }
+
    signed_transaction transfer(string from, string to, string amount,
                                string asset_symbol, string memo, bool broadcast = false)
    { try {
@@ -2051,49 +2066,13 @@ public:
       // check #583 BSIP10 hard fork time
       if( time_point_sec(time_point::now()) <= HARDFORK_583_TIME )
       {
-         transfer_operation xfer_op;
-         xfer_op.from = from_id;
-         xfer_op.to = to_id;
-         xfer_op.amount = asset_obj->amount_from_string(amount);
-
-         if( memo.size() )
-         {
-            xfer_op.memo = memo_data();
-            xfer_op.memo->from = from_account.options.memo_key;
-            xfer_op.memo->to = to_account.options.memo_key;
-            xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
-                                      to_account.options.memo_key, memo);
-         }
-
-         signed_transaction tx;
-         tx.operations.push_back(xfer_op);
-         set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
-         tx.validate();
-
-         return sign_transaction(tx, broadcast);
+         return build_transfer_trx<transfer_operation>(from_id, to_id, from_account, to_account,
+                                                       amount, asset_obj, memo, broadcast);
       }
       else
       {
-         transfer_v2_operation xfer_op;
-         xfer_op.from = from_id;
-         xfer_op.to = to_id;
-         xfer_op.amount = asset_obj->amount_from_string(amount);
-
-         if( memo.size() )
-         {
-            xfer_op.memo = memo_data();
-            xfer_op.memo->from = from_account.options.memo_key;
-            xfer_op.memo->to = to_account.options.memo_key;
-            xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
-                                      to_account.options.memo_key, memo);
-         }
-
-         signed_transaction tx;
-         tx.operations.push_back(xfer_op);
-         set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
-         tx.validate();
-
-         return sign_transaction(tx, broadcast);
+         return build_transfer_trx<transfer_v2_operation>(from_id, to_id, from_account, to_account,
+                                                          amount, asset_obj, memo, broadcast);
       }
    } FC_CAPTURE_AND_RETHROW( (from)(to)(amount)(asset_symbol)(memo)(broadcast) ) }
 

@@ -90,12 +90,21 @@ namespace graphene { namespace chain {
       {
          return params.fee;
       }
+      // Extended calculate_fee function calculate_fee_extended() will be defined in derived classes.
+      // The default implementation would just call calculate_fee(), but it will never be called,
+      // only causes trouble, so don't define it here.
+      //
+      // template<typename T>
+      // fee_type calculate_fee_extended(const T& params, const variant& extended_params)const
+      // { return { this->calculate_fee( params ) }; }
       void get_required_authorities( vector<authority>& )const{}
       void get_required_active_authorities( flat_set<account_id_type>& )const{}
       void get_required_owner_authorities( flat_set<account_id_type>& )const{}
       void validate()const{}
 
       static uint64_t calculate_data_fee( uint64_t bytes, uint64_t price_per_kbyte );
+      /// Whether fee is scalable after calculated
+      virtual bool is_fee_scalable() const { return true; }
    };
 
    /**

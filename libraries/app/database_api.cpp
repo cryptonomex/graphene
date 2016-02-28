@@ -130,6 +130,7 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
       bool verify_account_authority( const string& name_or_id, const flat_set<public_key_type>& signers )const;
       processed_transaction validate_transaction( const signed_transaction& trx )const;
       vector< fc::variant > get_required_fees( const vector<operation>& ops, asset_id_type id )const;
+      asset get_operation_fee( const operation& op, const asset_id_type id = asset_id_type(0) )const;
 
       // Proposed transactions
       vector<proposal_object> get_proposed_transactions( account_id_type id )const;
@@ -1626,6 +1627,11 @@ vector< fc::variant > database_api::get_required_fees( const vector<operation>& 
    return my->get_required_fees( ops, id );
 }
 
+asset database_api::get_operation_fee( const operation& op, const asset_id_type id )const
+{
+   return my->get_operation_fee( op, id );
+}
+
 /**
  * Container method for mutually recursive functions used to
  * implement get_required_fees() with potentially nested proposals.
@@ -1650,29 +1656,11 @@ struct get_required_fees_helper
       {
          return set_proposal_create_op_fees( op );
       }
-      else if(op.which() == operation::tag<transfer_operation>::value )
-      {
-         // transfer_operation need asset_object to calculate fees
-         asset_id_type transferring_asset_id = op.get<transfer_operation>().amount.asset_id;
-         const asset_object& transferring_asset_object = transferring_asset_id(db);
-         asset fee = current_fee_schedule.set_fee( op, transferring_asset_object, core_exchange_rate );
-         fc::variant result;
-         fc::to_variant( fee, result );
-         return result;
-      }
-      else if(op.which() == operation::tag<transfer_v2_operation>::value )
-      {
-         // transfer_v2_operation need asset_object to calculate fees
-         asset_id_type transferring_asset_id = op.get<transfer_v2_operation>().amount.asset_id;
-         const asset_object& transferring_asset_object = transferring_asset_id(db);
-         asset fee = current_fee_schedule.set_fee( op, transferring_asset_object, core_exchange_rate );
-         fc::variant result;
-         fc::to_variant( fee, result );
-         return result;
-      }
       else
       {
-         asset fee = current_fee_schedule.set_fee( op, core_exchange_rate );
+         fc::variant extended_fee_parameters;
+         db.build_extended_fee_parameters( op, extended_fee_parameters );
+         asset fee = current_fee_schedule.set_fee_extended( op, extended_fee_parameters, core_exchange_rate );
          fc::variant result;
          fc::to_variant( fee, result );
          return result;
@@ -1726,6 +1714,17 @@ vector< fc::variant > database_api_impl::get_required_fees( const vector<operati
       result.push_back( helper.set_op_fees( op ) );
    }
    return result;
+}
+
+asset database_api_impl::get_operation_fee( const operation& op, const asset_id_type id )const
+{
+   // we copy the op because we need to mutate an operation to reliably
+   // determine its fee
+   operation _op = op;
+   fc::variant extended_fee_parameters;
+   _db.build_extended_fee_parameters( _op, extended_fee_parameters );
+   const asset_object& a = id(_db);
+   return _db.current_fee_schedule().set_fee_extended( _op, extended_fee_parameters, a.options.core_exchange_rate );
 }
 
 //////////////////////////////////////////////////////////////////////

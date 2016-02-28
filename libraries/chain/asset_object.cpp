@@ -161,6 +161,10 @@ string asset_object::amount_to_string(share_type amount) const
 
 asset_transfer_fee_mode asset_object::get_transfer_fee_mode() const
 {
+   // if asset's CER is not set, return default mode
+   if( id != asset_id_type(0) && options.core_exchange_rate.is_null() )
+      return GRAPHENE_DEFAULT_TRANSFER_FEE_MODE;
+   // find the mode
    if( options.extensions.size() > 0 )
    {
       for( const asset_options::future_extensions& e : options.extensions )

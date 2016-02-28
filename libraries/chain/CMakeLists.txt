@@ -12,6 +12,7 @@ if( GRAPHENE_DISABLE_UNITY_BUILD )
         db_balance.cpp
         db_block.cpp
         db_debug.cpp
+        db_fee.cpp
         db_getter.cpp
         db_init.cpp
         db_maint.cpp

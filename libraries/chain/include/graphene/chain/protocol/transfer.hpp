@@ -47,6 +47,12 @@ namespace graphene { namespace chain {
          uint64_t fee             =  20 * GRAPHENE_BLOCKCHAIN_PRECISION;
          uint32_t price_per_kbyte =  10 * GRAPHENE_BLOCKCHAIN_PRECISION; /// only required for large memos.
       };
+      struct extended_calculate_fee_parameters {
+         /// Transfer fee mode of transferring asset
+         asset_transfer_fee_mode transferring_asset_transfer_fee_mode  = asset_transfer_fee_mode_flat;
+         /// data field for future extensions
+         extensions_type extensions;
+      };
 
       asset            fee;
       /// Account to transfer asset from
@@ -62,10 +68,10 @@ namespace graphene { namespace chain {
 
       account_id_type fee_payer()const { return from; }
       void            validate()const;
-      /// Old function to calculate fee. Deprecated.
+      /// The original calculate_fee function. Deprecated in this operation.
       share_type      calculate_fee(const fee_parameters_type& k)const;
-      /// Calculate fee
-      share_type      calculate_fee(const fee_parameters_type& k, const asset_object& a)const;
+      /// Extended calculate fee function
+      share_type      calculate_fee_extended(const fee_parameters_type& k, const variant& extended)const;
    };
 
    /**
@@ -97,6 +103,16 @@ namespace graphene { namespace chain {
          /// data field for future extensions
          extensions_type extensions;
       };
+      struct extended_calculate_fee_parameters {
+         /// Scale
+         uint32_t                scale                                 = 1;
+         /// Transfer fee mode of transferring asset
+         asset_transfer_fee_mode transferring_asset_transfer_fee_mode  = asset_transfer_fee_mode_flat;
+         /// core_exchange_rate of transferring asset
+         price                   transferring_asset_core_exchange_rate = price::unit_price();
+         /// data field for future extensions
+         extensions_type extensions;
+      };
 
       asset            fee;
       /// Account to transfer asset from
@@ -112,9 +128,13 @@ namespace graphene { namespace chain {
 
       account_id_type fee_payer()const { return from; }
       void            validate()const;
-      share_type      calculate_fee(const fee_parameters_type& k)const; /// don't use it
+      /// The original calculate_fee function. Deprecated in this operation.
+      share_type      calculate_fee(const fee_parameters_type& k)const;
+      /// Extended calculate fee function.
       /// Calculate fee and scale. Since it's better that percentage not scale, we scale inside.
-      share_type      calculate_fee(const fee_parameters_type& k, const uint32_t scale, const asset_object& a)const;
+      share_type      calculate_fee_extended(const fee_parameters_type& k, const variant& extended)const;
+      /// Override is_fee_scalable() to return false
+      virtual bool is_fee_scalable() const override { return false; }
    };
 
    /**
@@ -160,3 +180,8 @@ FC_REFLECT( graphene::chain::override_transfer_operation::fee_parameters_type, (
 FC_REFLECT( graphene::chain::override_transfer_operation, (fee)(issuer)(from)(to)(amount)(memo)(extensions) )
 FC_REFLECT( graphene::chain::transfer_operation, (fee)(from)(to)(amount)(memo)(extensions) )
 FC_REFLECT( graphene::chain::transfer_v2_operation, (fee)(from)(to)(amount)(memo)(extensions) )
+
+FC_REFLECT( graphene::chain::transfer_operation::extended_calculate_fee_parameters,
+              (transferring_asset_transfer_fee_mode)(extensions) )
+FC_REFLECT( graphene::chain::transfer_v2_operation::extended_calculate_fee_parameters,
+              (scale)(transferring_asset_transfer_fee_mode)(transferring_asset_core_exchange_rate)(extensions) )

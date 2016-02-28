@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <graphene/chain/protocol/fee_schedule.hpp>
 #include <fc/smart_ref_impl.hpp>
+#include <boost/tti/has_member_function.hpp>
 
 namespace fc
 {
@@ -90,6 +91,59 @@ namespace graphene { namespace chain {
 
    };
 
+   BOOST_TTI_HAS_MEMBER_FUNCTION(calculate_fee_extended)
+
+   struct calc_fee_extended_visitor
+   {
+      typedef uint64_t result_type;
+
+      const fee_parameters& param;
+      const variant& extended;
+
+      calc_fee_extended_visitor( const fee_parameters& p, const variant& e ) : param(p), extended(e) {}
+
+      template<typename OpType>
+      result_type calculate_operation_fee( const OpType& op, std::true_type )const
+      {
+         auto& fee_param = param.get<typename OpType::fee_parameters_type>();
+         return op.calculate_fee_extended( fee_param, extended ).value;
+      }
+
+      template<typename OpType>
+      result_type calculate_operation_fee( const OpType& op, std::false_type )const
+      {
+         auto& fee_param = param.get<typename OpType::fee_parameters_type>();
+         return op.calculate_fee( fee_param ).value;
+      }
+
+      template<typename OpType>
+      result_type operator()( const OpType& op )const
+      {
+         const bool b = has_member_function_calculate_fee_extended<
+                              OpType,
+                              share_type,
+                              boost::mpl::vector<const typename OpType::fee_parameters_type&, const variant&>,
+                              boost::function_types::const_qualified
+                        >::value;
+         return calculate_operation_fee( op, std::integral_constant<bool, b>() );
+      }
+
+   };
+
+   struct is_fee_scalable_visitor
+   {
+      typedef bool result_type;
+
+      is_fee_scalable_visitor() {}
+
+      template<typename OpType>
+      result_type operator()(  const OpType& op )const
+      {
+         return op.is_fee_scalable();
+      }
+
+   };
+
    struct set_fee_visitor
    {
       typedef void result_type;
@@ -139,33 +193,21 @@ namespace graphene { namespace chain {
       return scale_and_convert_fee( base_value, core_exchange_rate );
    }
 
-   asset fee_schedule::calculate_fee( const operation& op, const asset_object& asset_obj, const price& core_exchange_rate )const
+   asset fee_schedule::calculate_fee_extended( const operation& op,
+                                               const variant& extended,
+                                               const price& core_exchange_rate )const
    {
-      if( op.which() != operation::tag<transfer_operation>::value
-            && op.which() != operation::tag<transfer_v2_operation>::value )
-         return calculate_fee( op, core_exchange_rate );
-
-      //idump( (op)(core_exchange_rate) );
-      if( op.which() == operation::tag<transfer_v2_operation>::value )
-      {
-         const fee_parameters& params = find_op_fee_parameters( op );
-         auto& transfer_v2_op = op.get<transfer_v2_operation>();
-         auto& transfer_v2_fee_param = params.get<transfer_v2_operation::fee_parameters_type>();
-         // Since percentage doesn't scale, we scale inside
-         auto scaled_value = transfer_v2_op.calculate_fee( transfer_v2_fee_param, scale, asset_obj ).value;
-         return convert_fee( scaled_value, core_exchange_rate );
-      }
-
+      //idump( (op)(extended)(core_exchange_rate) );
       const fee_parameters& params = find_op_fee_parameters( op );
-      auto& transfer_op = op.get<transfer_operation>();
-      auto& transfer_fee_param = params.get<transfer_operation::fee_parameters_type>();
-      auto base_value = transfer_op.calculate_fee( transfer_fee_param, asset_obj ).value;
-      return scale_and_convert_fee( base_value, core_exchange_rate );
+      auto base_value = op.visit( calc_fee_extended_visitor( params, extended ) );
+      bool is_fee_scalable = op.visit( is_fee_scalable_visitor() );
+      if( is_fee_scalable ) return scale_and_convert_fee( base_value, core_exchange_rate );
+      else return convert_fee( base_value, core_exchange_rate );
    }
 
    asset fee_schedule::scale_and_convert_fee( const uint64_t base_value, const price& core_exchange_rate )const
    {
-      //idump( (base_value)(scaled)(core_exchange_rate) );
+      //idump( (base_value)(core_exchange_rate) );
       return convert_fee( scale_fee( base_value ), core_exchange_rate );
    }
 
@@ -173,6 +215,7 @@ namespace graphene { namespace chain {
    {
       auto scaled = fc::uint128(base_value) * scale;
       scaled /= GRAPHENE_100_PERCENT;
+      //idump( (base_value)(scaled) );
       FC_ASSERT( scaled <= GRAPHENE_MAX_SHARE_SUPPLY );
       return scaled;
    }
@@ -211,14 +254,14 @@ namespace graphene { namespace chain {
       return f_max;
    }
 
-   asset fee_schedule::set_fee( operation& op, const asset_object& asset, const price& core_exchange_rate )const
+   asset fee_schedule::set_fee_extended( operation& op, const variant& extended, const price& core_exchange_rate )const
    {
-      auto f = calculate_fee( op, asset, core_exchange_rate );
+      auto f = calculate_fee_extended( op, extended, core_exchange_rate );
       auto f_max = f;
       for( int i=0; i<MAX_FEE_STABILIZATION_ITERATION; i++ )
       {
          op.visit( set_fee_visitor( f_max ) );
-         auto f2 = calculate_fee( op, asset, core_exchange_rate );
+         auto f2 = calculate_fee_extended( op, extended, core_exchange_rate );
          if( f == f2 )
             break;
          f_max = std::max( f_max, f2 );

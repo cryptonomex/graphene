@@ -28,15 +28,15 @@ namespace graphene { namespace chain {
 
 share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule )const
 {
-   FC_THROW( "Deprecated. Use calculate_fee(const fee_parameters_type& schedule, const asset_object& asset) instead." );
+   FC_THROW( "Deprecated. Use calculate_fee_extended( const fee_parameters_type& schedule, const variant& extended ) instead." );
 }
 
-share_type transfer_operation::calculate_fee( const fee_parameters_type& schedule, const asset_object& asset_obj )const
+share_type transfer_operation::calculate_fee_extended( const fee_parameters_type& schedule, const variant& extended )const
 {
    share_type core_fee_required;
-   auto o = asset_obj.get_transfer_fee_mode();
-   if( o == asset_transfer_fee_mode_flat
-         || ( asset_obj.options.core_exchange_rate.is_null() && asset_obj.id != asset_id_type() )  ) // flat fee mode
+   extended_calculate_fee_parameters p;
+   from_variant( extended, p );
+   if( p.transferring_asset_transfer_fee_mode == asset_transfer_fee_mode_flat ) // flat fee mode
    {
       core_fee_required = schedule.fee;
    }
@@ -59,28 +59,28 @@ void transfer_operation::validate()const
 
 share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& schedule )const
 {
-   FC_THROW( "Use calculate_fee( const fee_parameters_type& schedule, const uint32_t scale, const asset_object& asset ) instead." );
+   FC_THROW( "Use calculate_fee_extended( const fee_parameters_type& schedule, const variant& extended ) instead." );
 }
 
-share_type transfer_v2_operation::calculate_fee( const fee_parameters_type& schedule,
-                                                 const uint32_t scale,
-                                                 const asset_object& asset_obj )const
+share_type transfer_v2_operation::calculate_fee_extended( const fee_parameters_type& schedule,
+                                                          const variant& extended )const
 {
    share_type core_fee_required;
-   auto o = asset_obj.get_transfer_fee_mode();
-   if( o == asset_transfer_fee_mode_flat
-         || ( asset_obj.options.core_exchange_rate.is_null() && asset_obj.id != asset_id_type() )  ) // flat fee mode
+   extended_calculate_fee_parameters p;
+   from_variant( extended, p );
+   uint32_t scale = p.scale;
+   if( p.transferring_asset_transfer_fee_mode == asset_transfer_fee_mode_flat ) // flat fee mode
    {
       auto core_fee_128 = fc::uint128(schedule.flat_fee);
       core_fee_128 *= scale;
       core_fee_128 /= GRAPHENE_100_PERCENT;
       core_fee_required = core_fee_128.to_uint64();
    }
-   else if( o == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
+   else if( p.transferring_asset_transfer_fee_mode == asset_transfer_fee_mode_percentage_simple ) // simple percentage fee mode
    {
       // need to know CER of amount.asset_id so that fee can be calculated
       // fee = amount.amount * asset.CER * transfer_v2_operation.fee_parameters_type.percentage
-      auto core_amount = amount * asset_obj.options.core_exchange_rate;
+      auto core_amount = amount * p.transferring_asset_core_exchange_rate;
       auto core_fee_amount = fc::uint128(core_amount.amount.value);
       core_fee_amount *= schedule.percentage;
       core_fee_amount /= GRAPHENE_100_PERCENT;

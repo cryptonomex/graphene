@@ -240,6 +240,13 @@ namespace graphene { namespace chain {
 
          void update_witness_schedule();
 
+         //////////////////// db_fee.cpp ////////////////////
+         /**
+          * Base on the given operation, construct the extended parameter
+          * which is required for calculating fee (extended), save to the variant.
+          */
+         void build_extended_fee_parameters(const operation& o, variant& v);
+
          //////////////////// db_getter.cpp ////////////////////
 
          const chain_id_type&                   get_chain_id()const;
