@@ -2020,41 +2020,9 @@ public:
    } FC_CAPTURE_AND_RETHROW((order_id)) }
 
    template<typename T>
-   signed_transaction build_transfer_trx( account_id_type& from_id,
-                                          account_id_type& to_id,
-                                          account_object& from_account,
-                                          account_object& to_account,
-                                          string& amount,
-                                          fc::optional<asset_object>& asset_obj,
-                                          string& memo,
-                                          bool broadcast = false)
+   signed_transaction build_transfer_trx( string from, string to, string amount,
+                                          string asset_symbol, string memo, bool broadcast = false )
    {
-         T xfer_op;
-         xfer_op.from = from_id;
-         xfer_op.to = to_id;
-         xfer_op.amount = asset_obj->amount_from_string(amount);
-
-         if( memo.size() )
-         {
-            xfer_op.memo = memo_data();
-            xfer_op.memo->from = from_account.options.memo_key;
-            xfer_op.memo->to = to_account.options.memo_key;
-            xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
-                                      to_account.options.memo_key, memo);
-         }
-
-         signed_transaction tx;
-         tx.operations.push_back(xfer_op);
-         set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
-         tx.validate();
-
-         return sign_transaction(tx, broadcast);
-   }
-
-   signed_transaction transfer(string from, string to, string amount,
-                               string asset_symbol, string memo, bool broadcast = false)
-   { try {
-      FC_ASSERT( !self.is_locked() );
       fc::optional<asset_object> asset_obj = get_asset(asset_symbol);
       FC_ASSERT(asset_obj, "Could not find asset matching ${asset}", ("asset", asset_symbol));
 
@@ -2063,16 +2031,42 @@ public:
       account_id_type from_id = from_account.id;
       account_id_type to_id = get_account_id(to);
 
+      T xfer_op;
+      xfer_op.from = from_id;
+      xfer_op.to = to_id;
+      xfer_op.amount = asset_obj->amount_from_string(amount);
+
+      if( memo.size() )
+      {
+         xfer_op.memo = memo_data();
+         xfer_op.memo->from = from_account.options.memo_key;
+         xfer_op.memo->to = to_account.options.memo_key;
+         xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
+                                   to_account.options.memo_key, memo);
+      }
+
+      signed_transaction tx;
+      tx.operations.push_back(xfer_op);
+      set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
+      tx.validate();
+
+      return sign_transaction(tx, broadcast);
+   }
+
+   signed_transaction transfer(string from, string to, string amount,
+                               string asset_symbol, string memo, bool broadcast = false)
+   { try {
+      FC_ASSERT( !self.is_locked() );
       // check #583 BSIP10 hard fork time
       if( time_point_sec(time_point::now()) <= HARDFORK_583_TIME )
       {
-         return build_transfer_trx<transfer_operation>(from_id, to_id, from_account, to_account,
-                                                       amount, asset_obj, memo, broadcast);
+         return build_transfer_trx<transfer_operation>( from, to, amount,
+                                                        asset_symbol, memo, broadcast );
       }
       else
       {
-         return build_transfer_trx<transfer_v2_operation>(from_id, to_id, from_account, to_account,
-                                                          amount, asset_obj, memo, broadcast);
+         return build_transfer_trx<transfer_v2_operation>( from, to, amount,
+                                                           asset_symbol, memo, broadcast );
       }
    } FC_CAPTURE_AND_RETHROW( (from)(to)(amount)(asset_symbol)(memo)(broadcast) ) }
 

@@ -145,24 +145,27 @@ void transfer_v2_evaluator::pay_fee( const operation& op )
       const transfer_v2_operation& o = op.get<transfer_v2_operation>();
       database& d = db();
       const asset_object&   asset_type      = o.amount.asset_id(d);
-      d.modify(*fee_paying_account_statistics, [&](account_statistics_object& s)
+      const auto vesting_threshold = d.get_global_properties().parameters.cashback_vesting_threshold;
+      const auto fee_mode = asset_type.get_transfer_fee_mode();
+      if( fee_mode == asset_transfer_fee_mode_flat )
       {
-         auto vesting_threshold = d.get_global_properties().parameters.cashback_vesting_threshold;
-         auto fee_mode = asset_type.get_transfer_fee_mode();
-         if( fee_mode == asset_transfer_fee_mode_flat )
+         d.modify(*fee_paying_account_statistics, [&](account_statistics_object& s)
          {
             s.pay_fee( core_fee_paid, vesting_threshold );
-         }
-         else if( fee_mode == asset_transfer_fee_mode_percentage_simple )
+         });
+      }
+      else if( fee_mode == asset_transfer_fee_mode_percentage_simple )
+      {
+         const auto& params = d.current_fee_schedule().find_op_fee_parameters( o );
+         const auto& param = params.get<transfer_v2_operation::fee_parameters_type>();
+         auto scaled_min_fee = fc::uint128( param.percentage_min_fee );
+         scaled_min_fee *= d.current_fee_schedule().scale;
+         scaled_min_fee /= GRAPHENE_100_PERCENT;
+         d.modify(*fee_paying_account_statistics, [&](account_statistics_object& s)
          {
-            const auto& params = d.current_fee_schedule().find_op_fee_parameters( o );
-            const auto& param = params.get<transfer_v2_operation::fee_parameters_type>();
-            auto scaled_min_fee = fc::uint128( param.percentage_min_fee );
-            scaled_min_fee *= d.current_fee_schedule().scale;
-            scaled_min_fee /= GRAPHENE_100_PERCENT;
             s.pay_fee_pre_split_network( core_fee_paid, vesting_threshold, scaled_min_fee.to_uint64() );
-         }
-      });
+         });
+      }
    }
 } FC_CAPTURE_AND_RETHROW( (op) ) }
 

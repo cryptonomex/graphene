@@ -22,7 +22,6 @@
  * THE SOFTWARE.
  */
 #include <graphene/chain/protocol/transfer.hpp>
-#include <graphene/chain/asset_object.hpp>
 
 namespace graphene { namespace chain {
 
