@@ -77,9 +77,9 @@ namespace graphene { namespace net {
           *  @throws exception if error validating the item, otherwise the item is
           *          safe to broadcast on.
           */
-         virtual bool handle_block( const graphene::net::block_message& blk_msg, bool sync_mode, 
+         virtual bool handle_block( std::shared_ptr< graphene::net::block_message > blk_msg, bool sync_mode,
                                     std::vector<fc::uint160_t>& contained_transaction_message_ids ) = 0;
-         
+
          /**
           *  @brief Called when a new transaction comes in from the network
           *

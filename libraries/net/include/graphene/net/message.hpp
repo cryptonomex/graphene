@@ -106,6 +106,33 @@ namespace graphene { namespace net {
               ("msg_type", msg_type)
               );
      }
+
+     template<typename T>
+     std::shared_ptr<T> as_shared()const
+     {
+         try {
+          FC_ASSERT( msg_type == T::type );
+          std::shared_ptr< T > tmp_ptr = std::make_shared<T>();
+          T& tmp = *tmp_ptr;
+          if( data.size() )
+          {
+             fc::datastream<const char*> ds( data.data(), data.size() );
+             fc::raw::unpack( ds, tmp );
+          }
+          else
+          {
+             // just to make sure that tmp shouldn't have any data
+             fc::datastream<const char*> ds( nullptr, 0 );
+             fc::raw::unpack( ds, tmp );
+          }
+          return tmp_ptr;
+         } FC_RETHROW_EXCEPTIONS( warn,
+              "error unpacking network message as a '${type}'  ${x} !=? ${msg_type}",
+              ("type", fc::get_typename<T>::name() )
+              ("x", T::type)
+              ("msg_type", msg_type)
+              );
+     }
   };
 
 

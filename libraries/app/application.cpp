@@ -486,9 +486,13 @@ namespace detail {
        *
        * @throws exception if error validating the item, otherwise the item is safe to broadcast on.
        */
-      virtual bool handle_block(const graphene::net::block_message& blk_msg, bool sync_mode,
+      virtual bool handle_block(std::shared_ptr< graphene::net::block_message > blk_msg_ptr, bool sync_mode,
                                 std::vector<fc::uint160_t>& contained_transaction_message_ids) override
-      { try {
+      {
+         assert( blk_msg_ptr );
+         const graphene::net::block_message& blk_msg = *blk_msg_ptr;
+
+         try {
 
          auto latency = graphene::time::now() - blk_msg.block.timestamp;
          if (!sync_mode || blk_msg.block.block_num() % 10000 == 0)

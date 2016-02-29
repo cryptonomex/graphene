@@ -383,7 +383,7 @@ namespace graphene { namespace net { namespace detail {
 
       bool has_item( const net::item_id& id ) override;
       void handle_message( const message& ) override;
-      bool handle_block( const graphene::net::block_message& block_message, bool sync_mode, std::vector<fc::uint160_t>& contained_transaction_message_ids ) override;
+      bool handle_block( std::shared_ptr< graphene::net::block_message > block_message, bool sync_mode, std::vector<fc::uint160_t>& contained_transaction_message_ids ) override;
       void handle_transaction( const graphene::net::trx_message& transaction_message ) override;
       std::vector<item_hash_t> get_block_ids(const std::vector<item_hash_t>& blockchain_synopsis,
                                              uint32_t& remaining_item_count,
@@ -449,8 +449,8 @@ namespace graphene { namespace net { namespace detail {
       typedef std::unordered_map<graphene::net::block_id_type, fc::time_point> active_sync_requests_map;
 
       active_sync_requests_map              _active_sync_requests; /// list of sync blocks we've asked for from peers but have not yet received
-      std::list<graphene::net::block_message> _new_received_sync_items; /// list of sync blocks we've just received but haven't yet tried to process
-      std::list<graphene::net::block_message> _received_sync_items; /// list of sync blocks we've received, but can't yet process because we are still missing blocks that come earlier in the chain
+      std::list< graphene::net::block_message > _new_received_sync_items; /// list of sync blocks we've just received but haven't yet tried to process
+      std::list< graphene::net::block_message > _received_sync_items; /// list of sync blocks we've received, but can't yet process because we are still missing blocks that come earlier in the chain
       // @}
 
       fc::future<void> _process_backlog_of_sync_blocks_done;
@@ -684,8 +684,8 @@ namespace graphene { namespace net { namespace detail {
       void send_sync_block_to_node_delegate(const graphene::net::block_message& block_message_to_send);
       void process_backlog_of_sync_blocks();
       void trigger_process_backlog_of_sync_blocks();
-      void process_block_during_sync(peer_connection* originating_peer, const graphene::net::block_message& block_message, const message_hash_type& message_hash);
-      void process_block_during_normal_operation(peer_connection* originating_peer, const graphene::net::block_message& block_message, const message_hash_type& message_hash);
+      void process_block_during_sync(peer_connection* originating_peer, std::shared_ptr< graphene::net::block_message > block_message, const message_hash_type& message_hash);
+      void process_block_during_normal_operation(peer_connection* originating_peer, std::shared_ptr< graphene::net::block_message > block_message, const message_hash_type& message_hash);
       void process_block_message(peer_connection* originating_peer, const message& message_to_process, const message_hash_type& message_hash);
 
       void process_ordinary_message(peer_connection* originating_peer, const message& message_to_process, const message_hash_type& message_hash);
@@ -3021,7 +3021,9 @@ namespace graphene { namespace net { namespace detail {
       try
       {
         std::vector<fc::uint160_t> contained_transaction_message_ids;
-        _delegate->handle_block(block_message_to_send, true, contained_transaction_message_ids);
+        // TODO:  Avoid this copy by making _new_received_sync_items / _received_sync_items a list< shared_ptr >
+        std::shared_ptr< graphene::net::block_message > block_message_to_send_copy = std::make_shared< graphene::net::block_message >( block_message_to_send );
+        _delegate->handle_block(block_message_to_send_copy, true, contained_transaction_message_ids);
         ilog("Successfully pushed sync block ${num} (id:${id})",
              ("num", block_message_to_send.block.block_num())
              ("id", block_message_to_send.block_id));
@@ -3304,21 +3306,24 @@ namespace graphene { namespace net { namespace detail {
     }
 
     void node_impl::process_block_during_sync( peer_connection* originating_peer,
-                                               const graphene::net::block_message& block_message_to_process, const message_hash_type& message_hash )
+                                               std::shared_ptr< graphene::net::block_message > block_message_to_process, const message_hash_type& message_hash )
     {
       VERIFY_CORRECT_THREAD();
       dlog( "received a sync block from peer ${endpoint}", ("endpoint", originating_peer->get_remote_endpoint() ) );
 
       // add it to the front of _received_sync_items, then process _received_sync_items to try to
       // pass as many messages as possible to the client.
-      _new_received_sync_items.push_front( block_message_to_process );
+      // TODO:  Avoid this copy by making _new_received_sync_items / _received_sync_items a list< shared_ptr >
+      _new_received_sync_items.push_front( *block_message_to_process );
       trigger_process_backlog_of_sync_blocks();
     }
 
     void node_impl::process_block_during_normal_operation( peer_connection* originating_peer,
-                                                           const graphene::net::block_message& block_message_to_process,
+                                                           std::shared_ptr< graphene::net::block_message > block_message_to_process_ptr,
                                                            const message_hash_type& message_hash )
     {
+      assert( block_message_to_process_ptr );
+      const graphene::net::block_message& block_message_to_process = *block_message_to_process_ptr;
       fc::time_point message_receive_time = fc::time_point::now();
 
       dlog( "received a block from peer ${endpoint}, passing it to client", ("endpoint", originating_peer->get_remote_endpoint() ) );
@@ -3339,7 +3344,7 @@ namespace graphene { namespace net { namespace detail {
                       block_message_to_process.block_id) == _most_recent_blocks_accepted.end())
         {
           std::vector<fc::uint160_t> contained_transaction_message_ids;
-          _delegate->handle_block(block_message_to_process, false, contained_transaction_message_ids);
+          _delegate->handle_block(block_message_to_process_ptr, false, contained_transaction_message_ids);
           message_validated_time = fc::time_point::now();
           ilog("Successfully pushed block ${num} (id:${id})",
                 ("num", block_message_to_process.block.block_num())
@@ -3470,7 +3475,9 @@ namespace graphene { namespace net { namespace detail {
       // (it's possible that we request an item during normal operation and then get kicked into sync
       // mode before we receive and process the item.  In that case, we should process the item as a normal
       // item to avoid confusing the sync code)
-      graphene::net::block_message block_message_to_process(message_to_process.as<graphene::net::block_message>());
+
+      // The block_message_to_process will be sent into a different thread, so we use std::shared_ptr to keep it locked up
+      std::shared_ptr< graphene::net::block_message > block_message_to_process = message_to_process.as_shared<graphene::net::block_message>();
       auto item_iter = originating_peer->items_requested_from_peer.find(item_id(graphene::net::block_message_type, message_hash));
       if (item_iter != originating_peer->items_requested_from_peer.end())
       {
@@ -3484,11 +3491,11 @@ namespace graphene { namespace net { namespace detail {
       {
         // not during normal operation.  see if we requested it during sync
         auto sync_item_iter = originating_peer->sync_items_requested_from_peer.find(item_id(graphene::net::block_message_type,
-                                                                                            block_message_to_process.block_id));
+                                                                                            block_message_to_process->block_id));
         if (sync_item_iter != originating_peer->sync_items_requested_from_peer.end())
         {
           originating_peer->sync_items_requested_from_peer.erase(sync_item_iter);
-          _active_sync_requests.erase(block_message_to_process.block_id);
+          _active_sync_requests.erase(block_message_to_process->block_id);
           process_block_during_sync(originating_peer, block_message_to_process, message_hash);
           if (originating_peer->idle())
           {
@@ -3507,9 +3514,9 @@ namespace graphene { namespace net { namespace detail {
       // if we get here, we didn't request the message, we must have a misbehaving peer
       wlog("received a block ${block_id} I didn't ask for from peer ${endpoint}, disconnecting from peer",
            ("endpoint", originating_peer->get_remote_endpoint())
-           ("block_id", block_message_to_process.block_id));
+           ("block_id", block_message_to_process->block_id));
       fc::exception detailed_error(FC_LOG_MESSAGE(error, "You sent me a block that I didn't ask for, block_id: ${block_id}",
-                                                  ("block_id", block_message_to_process.block_id)
+                                                  ("block_id", block_message_to_process->block_id)
                                                   ("graphene_git_revision_sha", originating_peer->graphene_git_revision_sha)
                                                   ("graphene_git_revision_unix_timestamp", originating_peer->graphene_git_revision_unix_timestamp)
                                                   ("fc_git_revision_sha", originating_peer->fc_git_revision_sha)
@@ -5288,7 +5295,8 @@ namespace graphene { namespace net { namespace detail {
         else if (message_to_deliver.msg_type == block_message_type)
         {
           std::vector<fc::uint160_t> contained_transaction_message_ids;
-          destination_node->delegate->handle_block(message_to_deliver.as<block_message>(), false, contained_transaction_message_ids);
+          std::shared_ptr< graphene::net::block_message > block_message_to_deliver = message_to_deliver.as_shared<block_message>();
+          destination_node->delegate->handle_block(block_message_to_deliver, false, contained_transaction_message_ids);
         }
         else
           destination_node->delegate->handle_message(message_to_deliver);
@@ -5426,7 +5434,7 @@ namespace graphene { namespace net { namespace detail {
       INVOKE_AND_COLLECT_STATISTICS(handle_message, message_to_handle);
     }
 
-    bool statistics_gathering_node_delegate_wrapper::handle_block( const graphene::net::block_message& block_message, bool sync_mode, std::vector<fc::uint160_t>& contained_transaction_message_ids)
+    bool statistics_gathering_node_delegate_wrapper::handle_block( std::shared_ptr< graphene::net::block_message > block_message, bool sync_mode, std::vector<fc::uint160_t>& contained_transaction_message_ids)
     {
       INVOKE_AND_COLLECT_STATISTICS(handle_block, block_message, sync_mode, contained_transaction_message_ids);
     }
