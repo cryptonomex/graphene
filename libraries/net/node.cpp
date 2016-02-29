@@ -4061,7 +4061,7 @@ namespace graphene { namespace net { namespace detail {
       // method to inform us that the connection really closed (or may not if we manage to cancel
       // the read loop before it gets an EOF).
 
-      auto close_peers_from_list = [&]( std::list<peer_connection_ptr>& peers )
+      auto close_peers_from_list = [&]( std::unordered_set<peer_connection_ptr>& peers )
       {
         while( true )
         {
