@@ -384,7 +384,7 @@ namespace graphene { namespace net { namespace detail {
       bool has_item( const net::item_id& id ) override;
       void handle_message( const message& ) override;
       bool handle_block( std::shared_ptr< graphene::net::block_message > block_message, bool sync_mode, std::vector<fc::uint160_t>& contained_transaction_message_ids ) override;
-      void handle_transaction( const graphene::net::trx_message& transaction_message ) override;
+      void handle_transaction( std::shared_ptr< graphene::net::trx_message > transaction_message ) override;
       std::vector<item_hash_t> get_block_ids(const std::vector<item_hash_t>& blockchain_synopsis,
                                              uint32_t& remaining_item_count,
                                              uint32_t limit = 2000) override;
@@ -3817,8 +3817,8 @@ namespace graphene { namespace net { namespace detail {
         {
           if (message_to_process.msg_type == trx_message_type)
           {
-            trx_message transaction_message_to_process = message_to_process.as<trx_message>();
-            dlog("passing message containing transaction ${trx} to client", ("trx", transaction_message_to_process.trx.id()));
+            std::shared_ptr< trx_message > transaction_message_to_process = message_to_process.as_shared<trx_message>();
+            dlog("passing message containing transaction ${trx} to client", ("trx", transaction_message_to_process->trx.id()));
             _delegate->handle_transaction(transaction_message_to_process);
           }
           else
@@ -5291,7 +5291,7 @@ namespace graphene { namespace net { namespace detail {
       {
         const message& message_to_deliver = destination_node->messages_to_deliver.front();
         if (message_to_deliver.msg_type == trx_message_type)
-          destination_node->delegate->handle_transaction(message_to_deliver.as<trx_message>());
+          destination_node->delegate->handle_transaction(message_to_deliver.as_shared<trx_message>());
         else if (message_to_deliver.msg_type == block_message_type)
         {
           std::vector<fc::uint160_t> contained_transaction_message_ids;
@@ -5439,7 +5439,7 @@ namespace graphene { namespace net { namespace detail {
       INVOKE_AND_COLLECT_STATISTICS(handle_block, block_message, sync_mode, contained_transaction_message_ids);
     }
 
-    void statistics_gathering_node_delegate_wrapper::handle_transaction( const graphene::net::trx_message& transaction_message )
+    void statistics_gathering_node_delegate_wrapper::handle_transaction( std::shared_ptr< graphene::net::trx_message > transaction_message )
     {
       INVOKE_AND_COLLECT_STATISTICS(handle_transaction, transaction_message);
     }

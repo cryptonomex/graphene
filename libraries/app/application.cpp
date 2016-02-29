@@ -550,7 +550,7 @@ namespace detail {
          }
       } FC_CAPTURE_AND_RETHROW( (blk_msg)(sync_mode) ) }
 
-      virtual void handle_transaction(const graphene::net::trx_message& transaction_message) override
+      virtual void handle_transaction( std::shared_ptr< graphene::net::trx_message > transaction_message ) override
       { try {
          static fc::time_point last_call;
          static int trx_count = 0;
@@ -562,7 +562,7 @@ namespace detail {
             trx_count = 0;
          }
 
-         _chain_db->push_transaction( transaction_message.trx );
+         _chain_db->push_transaction( transaction_message->trx );
       } FC_CAPTURE_AND_RETHROW( (transaction_message) ) }
 
       virtual void handle_message(const message& message_to_process) override

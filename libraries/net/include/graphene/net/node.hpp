@@ -86,7 +86,7 @@ namespace graphene { namespace net {
           *  @throws exception if error validating the item, otherwise the item is
           *          safe to broadcast on.
           */
-         virtual void handle_transaction( const graphene::net::trx_message& trx_msg ) = 0;
+         virtual void handle_transaction( std::shared_ptr< graphene::net::trx_message > trx_msg ) = 0;
 
          /**
           *  @brief Called when a new message comes in from the network other than a
