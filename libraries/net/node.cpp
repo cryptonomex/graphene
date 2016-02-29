@@ -4060,33 +4060,50 @@ namespace graphene { namespace net { namespace detail {
       // This will close the sockets and may result in calls to our "on_connection_closing"
       // method to inform us that the connection really closed (or may not if we manage to cancel
       // the read loop before it gets an EOF).
-      // operate off copies of the lists in case they change during iteration
-      std::list<peer_connection_ptr> all_peers;
-      boost::push_back(all_peers, _active_connections);
-      boost::push_back(all_peers, _handshaking_connections);
-      boost::push_back(all_peers, _closing_connections);
 
-      for (const peer_connection_ptr& peer : all_peers)
+      auto close_peers_from_list = [&]( std::list<peer_connection_ptr>& peers )
       {
-        try
+        while( true )
         {
-          peer->destroy_connection();
-        }
-        catch ( const fc::exception& e )
-        {
-          wlog( "Exception thrown while closing peer connection, ignoring: ${e}", ("e", e) );
-        }
-        catch (...)
-        {
-          wlog( "Exception thrown while closing peer connection, ignoring" );
-        }
-      }
+          peer_connection_ptr peer;
+          {
+            // we have to be careful as the list may be modified concurrently, invalidating the iterator.
+            // so we confine the iterator to this scope, which should not yield
+            auto it = peers.begin();
+            if( it == peers.end() )
+              return;
+            peer = *it;
+          }
 
-      // and delete all of the peer_connection objects
-      _active_connections.clear();
-      _handshaking_connections.clear();
-      _closing_connections.clear();
-      all_peers.clear();
+          try
+          {
+            peer->destroy_connection();
+          }
+          catch ( const fc::exception& e )
+          {
+            wlog( "Exception thrown while closing peer connection, ignoring: ${e}", ("e", e) );
+          }
+          catch (...)
+          {
+            wlog( "Exception thrown while closing peer connection, ignoring" );
+          }
+
+          // peers.erase( peer );     // incorrect
+
+          // it might have moved into another list, so we simply (attempt to) delete it from every list
+          _active_connections.erase( peer );
+          _handshaking_connections.erase( peer );
+          _closing_connections.erase( peer );
+          _terminating_connections.erase( peer );
+        }
+      };
+
+      while( _active_connections.size() + _handshaking_connections.size() + _closing_connections.size() > 0 )
+      {
+        close_peers_from_list( _active_connections );
+        close_peers_from_list( _handshaking_connections );
+        close_peers_from_list( _closing_connections );
+      }
 
       {
 #ifdef USE_PEERS_TO_DELETE_MUTEX
@@ -4106,6 +4123,12 @@ namespace graphene { namespace net { namespace detail {
           wlog( "Exception thrown while terminating Delayed peer deletion task, ignoring" );
         }
         _peers_to_delete.clear();
+      }
+
+      // we just canceled the task that drains _terminating_connections, so drain it manually here
+      while( _terminating_connections.size() > 0 )
+      {
+        close_peers_from_list( _terminating_connections );
       }
 
       // Now that there are no more peers that can call methods on us, there should be no
