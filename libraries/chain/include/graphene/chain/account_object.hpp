@@ -22,9 +22,9 @@
  * THE SOFTWARE.
  */
 #pragma once
+#include <graphene/chain/hardfork.hpp>
 #include <graphene/chain/protocol/operations.hpp>
 #include <graphene/db/generic_index.hpp>
-#include <graphene/chain/hardfork.hpp>
 #include <boost/multi_index/composite_key.hpp>
 
 namespace graphene { namespace chain {
@@ -104,7 +104,7 @@ namespace graphene { namespace chain {
          /**
           * Tracks the most recent time when @ref coin_seconds_earned was updated.
           */
-         fc::time_point_sec             coin_seconds_earned_last_update = HARDFORK_FREE_TRX_TIME;
+         fc::time_point_sec             coin_seconds_earned_last_update = HARDFORK_603_TIME;
 
          /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees and etc.
          void process_fees(const account_object& a, database& d) const;

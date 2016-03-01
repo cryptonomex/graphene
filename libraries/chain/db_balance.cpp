@@ -69,7 +69,7 @@ void database::adjust_balance(account_id_type account, asset delta )
          b.balance = delta.amount.value;
       });
       // Update coin_seconds_earned and etc
-      if( head_block_time() > HARDFORK_FREE_TRX_TIME )
+      if( head_block_time() > HARDFORK_603_TIME )
       {
          // TODO how to deal with smart coins?
          if( delta.asset_id == asset_id_type() )
@@ -87,7 +87,7 @@ void database::adjust_balance(account_id_type account, asset delta )
          b.adjust_balance(delta);
       });
       // Update coin_seconds_earned and etc
-      if( head_block_time() > HARDFORK_FREE_TRX_TIME )
+      if( head_block_time() > HARDFORK_603_TIME )
       {
          // TODO how to deal with smart coins?
          if( delta.asset_id == asset_id_type() )

@@ -168,7 +168,7 @@ namespace graphene { namespace chain {
 
          prepare_fee(op.fee_payer(), op.fee);
 
-         if( db().head_block_time() > HARDFORK_FREE_TRX_TIME )
+         if( db().head_block_time() > HARDFORK_603_TIME )
             prepare_fee_from_coin_seconds(o);
 
          if( !trx_state->skip_fee_schedule_check )
@@ -180,8 +180,8 @@ namespace graphene { namespace chain {
                        ("payable_from_coin_seconds", max_fees_payable_with_coin_seconds)
                        ("core_fee_paid",core_fee_paid)("required", required_fee) );
             // if some fees are paid with coin seconds
-            if( core_fee_paid < required_core_fee )
-               fees_paid_with_coin_seconds = required_core_fee - core_fee_paid;
+            if( core_fee_paid < required_fee )
+               fees_paid_with_coin_seconds = required_fee - core_fee_paid;
          }
 
          return eval->do_evaluate(op);
@@ -198,15 +198,6 @@ namespace graphene { namespace chain {
          auto result = eval->do_apply(op);
 
          db_adjust_balance(op.fee_payer(), -fee_from_account);
-         // deduct fees from coin_seconds_earned
-         if( fees_paid_with_coin_seconds > 0 )
-         {
-            db().modify(*fee_payer_acc_stats, [&](account_statistics_object& o) {
-               fc::uint128_t coin_seconds_consumed( fees_paid_with_coin_seconds );
-               coin_seconds_consumed *= coin_seconds_as_fees_rate;
-               o.set_coin_seconds_earned( coin_seconds_earned - coin_seconds_consumed, db().head_block_time() );
-            });
-         }
 
          return result;
       }
