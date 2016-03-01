@@ -78,6 +78,18 @@ void_result committee_member_update_global_parameters_evaluator::do_evaluate(con
 { try {
    FC_ASSERT(trx_state->_is_proposed_trx);
 
+   database& d = db();
+
+   // #603 hard fork check
+   if( d.head_block_time() <= HARDFORK_603_TIME )
+   {
+      for( const auto& e : o.new_parameters.extensions )
+      {
+         FC_ASSERT( e.which() != chain_parameters::parameter_extension::tag<chain_parameters::ext::coin_seconds_as_fees_options>::value,
+                    "New parameters contain an extension which requires hardfork #603." );
+      }
+   }
+
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
 
