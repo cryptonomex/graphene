@@ -681,7 +681,7 @@ namespace graphene { namespace net { namespace detail {
 
       void on_connection_closed(peer_connection* originating_peer) override;
 
-      void send_sync_block_to_node_delegate(const graphene::net::block_message& block_message_to_send);
+      void send_sync_block_to_node_delegate( std::shared_ptr< graphene::net::block_message > block_message_to_send );
       void process_backlog_of_sync_blocks();
       void trigger_process_backlog_of_sync_blocks();
       void process_block_during_sync(peer_connection* originating_peer, std::shared_ptr< graphene::net::block_message > block_message, const message_hash_type& message_hash);
@@ -3010,8 +3010,10 @@ namespace graphene { namespace net { namespace detail {
       schedule_peer_for_deletion(originating_peer_ptr);
     }
 
-    void node_impl::send_sync_block_to_node_delegate(const graphene::net::block_message& block_message_to_send)
+    void node_impl::send_sync_block_to_node_delegate( std::shared_ptr< graphene::net::block_message > block_message_to_send_ptr )
     {
+      assert( block_message_to_send_ptr );
+      const graphene::net::block_message& block_message_to_send = *block_message_to_send_ptr;
       dlog("in send_sync_block_to_node_delegate()");
       bool client_accepted_block = false;
       bool discontinue_fetching_blocks_from_peer = false;
@@ -3021,10 +3023,8 @@ namespace graphene { namespace net { namespace detail {
       try
       {
         std::vector<fc::uint160_t> contained_transaction_message_ids;
-        // TODO:  Avoid this copy by making _new_received_sync_items / _received_sync_items a list< shared_ptr >
-        std::shared_ptr< graphene::net::block_message > block_message_to_send_copy = std::make_shared< graphene::net::block_message >( block_message_to_send );
         std::cerr << "calling handle_block from line " << __LINE__ << std::endl;
-        _delegate->handle_block(block_message_to_send_copy, true, contained_transaction_message_ids);
+        _delegate->handle_block(block_message_to_send_ptr, true, contained_transaction_message_ids);
         ilog("Successfully pushed sync block ${num} (id:${id})",
              ("num", block_message_to_send.block.block_num())
              ("id", block_message_to_send.block_id));
@@ -3266,7 +3266,9 @@ namespace graphene { namespace net { namespace detail {
             if (std::find(_most_recent_blocks_accepted.begin(), _most_recent_blocks_accepted.end(),
                           received_block_iter->block_id) == _most_recent_blocks_accepted.end())
             {
-              graphene::net::block_message block_message_to_process = *received_block_iter;
+              // TODO:  Need not make this copy if we make _received_sync_items a list of std::shared_ptr
+              std::shared_ptr< graphene::net::block_message > block_message_to_process =
+                std::make_shared< graphene::net::block_message >( *received_block_iter );
               _received_sync_items.erase(received_block_iter);
               _handle_message_calls_in_progress.emplace_back(fc::async([this, block_message_to_process](){
                 send_sync_block_to_node_delegate(block_message_to_process);
