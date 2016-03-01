@@ -194,6 +194,7 @@ namespace graphene { namespace chain {
 
          convert_fee();
          pay_fee(o);
+         pay_fee_with_coin_seconds();
 
          auto result = eval->do_apply(op);
 

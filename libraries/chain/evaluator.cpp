@@ -135,7 +135,6 @@ database& generic_evaluator::db()const { return trx_state->db(); }
          {
             s.pay_fee( core_fee_paid, d.get_global_properties().parameters.cashback_vesting_threshold );
          });
-         pay_fee_with_coin_seconds();
       }
    } FC_CAPTURE_AND_RETHROW() }
 
@@ -173,13 +172,12 @@ database& generic_evaluator::db()const { return trx_state->db(); }
          // deduct fees from coin_seconds_earned
          if( fees_paid_with_coin_seconds > 0 )
          {
+            fc::uint128_t coin_seconds_consumed( fees_paid_with_coin_seconds.value );
+            coin_seconds_consumed *= coin_seconds_as_fees_rate.value;
             d.modify(*fee_paying_account_statistics, [&](account_statistics_object& o) {
-               fc::uint128_t coin_seconds_consumed( fees_paid_with_coin_seconds.value );
-               coin_seconds_consumed *= coin_seconds_as_fees_rate.value;
                o.set_coin_seconds_earned( coin_seconds_earned - coin_seconds_consumed, d.head_block_time() );
             });
          }
-
       }
    } FC_CAPTURE_AND_RETHROW() }
 } }
