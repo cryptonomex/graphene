@@ -180,7 +180,7 @@ namespace graphene { namespace chain {
     */
    struct account_whitelist_operation : public base_operation
    {
-      struct fee_parameters_type { share_type fee = 300000; };
+      struct fee_parameters_type { share_type fee = 3 * GRAPHENE_BLOCKCHAIN_PRECISION; };
       enum account_listing {
          no_listing = 0x0, ///< No opinion is specified about this account
          white_listed = 0x1, ///< This account is whitelisted, but not blacklisted
@@ -218,7 +218,7 @@ namespace graphene { namespace chain {
     */
    struct account_upgrade_operation : public base_operation
    {
-      struct fee_parameters_type { 
+      struct fee_parameters_type {
          uint64_t membership_annual_fee   =  2000 * GRAPHENE_BLOCKCHAIN_PRECISION;
          uint64_t membership_lifetime_fee = 10000 * GRAPHENE_BLOCKCHAIN_PRECISION; ///< the cost to upgrade to a lifetime member
       };
