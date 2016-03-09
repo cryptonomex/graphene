@@ -1,0 +1,4 @@
+// #540 Fix price feed expiration check, so websocket server never spamming too much data
+#ifndef HARDFORK_540_TIME
+#define HARDFORK_540_TIME (fc::time_point_sec( 1457550000 ))
+#endif
