@@ -42,6 +42,7 @@ template< typename T >
 uint64_t convert_to_string( const T& t )
 {
    static_assert( false, "generic convert_to_string() not allowed (fee_parameter_type contains member of unexpected type)" );
+   return 0;
 }
 
 using graphene::chain::share_type;
