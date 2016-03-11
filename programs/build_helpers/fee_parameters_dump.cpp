@@ -61,7 +61,7 @@ struct context
 
 struct dump_fee_member_visitor
 {
-   dump_fee_member_visitor( context& _ctx ) : ctx(_ctx) {}
+   dump_fee_member_visitor( std::shared_ptr< context >& _ctx ) : ctx(_ctx) {}
 
    template<typename Member, class Class, Member (Class::*member)>
    void operator()( const char* name )const
@@ -73,39 +73,39 @@ struct dump_fee_member_visitor
       FC_ASSERT( 0 == (default_amount % GRAPHENE_BLOCKCHAIN_PRECISION) );
       uint64_t default_amount_units = default_amount_satoshis / GRAPHENE_BLOCKCHAIN_PRECISION;
       std::string str_amount = default_amount_units;
-      ctx.out << "   " << std::left << std::setw( 10 ) << mtype
+      ctx->out << "   " << std::left << std::setw( 10 ) << mtype
         << " " << std::left << std::setw( 25 ) << mname
         << " = " << std::right << std::setw( 6 ) << default_amount_units
         << " * GRAPHENE_BLOCKCHAIN_PRECISION;\n";
-      ctx.reflect_out << "(" << name << ")";
+      ctx->reflect_out << "(" << name << ")";
    }
 
-   mutable context& ctx;
+   std::shared_ptr< context > ctx;
 };
 
 struct dump_fee_struct_visitor
 {
    typedef void result_type;
 
-   dump_fee_struct_visitor( context& _ctx ) : ctx(_ctx) {}
+   dump_fee_struct_visitor( std::shared_ptr< context >& _ctx ) : ctx(_ctx) {}
 
    template< typename Op > void operator()( const Op& op )
    {
       dump_fee_member_visitor vtor( ctx );
       std::string optype = fc::get_typename<Op>::name();
 
-      ctx.reflect_out << "FC_REFLECT( " << optype << ", ";
+      ctx->reflect_out << "FC_REFLECT( " << optype << ", ";
 
-      ctx.out << "template<>\n"
+      ctx->out << "template<>\n"
          "struct fee_parameters_type< " << optype << " >\n"
          "{\n"
       fc::reflector<Op::fee_parameters_type>::visit( vtor );
-      ctx.out << "};\n\n";
+      ctx->out << "};\n\n";
 
-      ctx.reflect_out << " )\n";
+      ctx->reflect_out << " )\n";
    }
 
-   mutable context& ctx;
+   std::shared_ptr< context > ctx;
 };
 
 } }
@@ -117,7 +117,8 @@ int main( int argc, char** argv, char** envp )
 
    std::stringstream out;
    std::stringstream reflect_out;
-   graphene::fee_parameters_dump::context ctx( out, reflect_out );
+   std::shared_ptr< graphene::fee_parameters_dump::context > ctx =
+      std::make_shared< graphene::fee_parameters_dump::context >( out, reflect_out );
 
    for( int which=0; which<op.count(); which++ )
    {
