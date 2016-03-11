@@ -60,10 +60,13 @@ template<> uint64_t convert_to_string< share_type >( const share_type& x )
 
 struct context
 {
-   context( std::stringstream& _out, std::stringstream& _reflect_out ) : out(_out), reflect_out(_reflect_out) {}
+   context( std::stringstream& _out, std::stringstream& _reflect_out, std::stringstream& _sv_out, std::stringstream& _apply_out )
+      : out(_out), reflect_out(_reflect_out), sv_out(_sv_out), apply_out(_apply_out) {}
 
    std::stringstream& out;
    std::stringstream& reflect_out;
+   std::stringstream& sv_out;
+   std::stringstream& apply_out;
 };
 
 struct dump_fee_member_visitor
@@ -103,6 +106,7 @@ struct dump_fee_member_visitor
         << " = " << std::right << std::setw( 6 ) << default_amount_string
         << default_amount_suffix << ";\n";
       ctx->reflect_out << "(" << name << ")";
+      ctx->apply_out << "      fp." << name << " = " name << ";\n";
    }
 
    std::shared_ptr< context > ctx;
@@ -119,13 +123,19 @@ struct dump_fee_struct_visitor
       dump_fee_member_visitor vtor( ctx );
       std::string optype = fc::get_typename<Op>::name();
 
-      ctx->reflect_out << "FC_REFLECT( " << optype << ", ";
+      ctx->reflect_out << "FC_REFLECT( graphene::chain::legacy::fee_parameters_type< " << optype << " >, ";
+      ctx->sv_out << "fee_parameters_type< " << optype << " >";
+      ctx->apply_out.clear();
 
       ctx->out << "template<>\n"
          "struct fee_parameters_type< " << optype << " >\n"
          "{\n";
       fc::reflector< typename Op::fee_parameters_type >::visit( vtor );
-      ctx->out << "};\n\n";
+      ctx->out << "\n"
+                  "   void apply_to( " << optype << "::fee_parameters_type& fp )const\n"
+                  "   {\n" << ctx->apply_out.str() <<
+                  "   }\n"
+                  "};\n\n";
 
       ctx->reflect_out << " )\n";
    }
@@ -139,14 +149,21 @@ void _main()
 {
    std::stringstream out;
    std::stringstream reflect_out;
+   std::stringstream sv_out;
+   std::stringstream apply_out;
    std::shared_ptr< graphene::fee_parameters_dump::context > ctx =
-      std::make_shared< graphene::fee_parameters_dump::context >( out, reflect_out );
+      std::make_shared< graphene::fee_parameters_dump::context >( out, reflect_out, sv_out, apply_out );
 
    graphene::fee_parameters_dump::dump_fee_struct_visitor vtor(ctx);
    graphene::chain::operation op;
 
+   sv_out << "typedef fc::static_variant<\n";
+
    for( int which=0; which<op.count(); which++ )
    {
+      if( which > 0 )
+         sv_out << ",\n";
+      sv_out << "   ";
       op.set_which( which );
       op.visit( vtor );
    }
