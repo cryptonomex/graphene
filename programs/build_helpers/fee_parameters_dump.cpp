@@ -125,7 +125,7 @@ struct dump_fee_struct_visitor
 
       ctx->reflect_out << "FC_REFLECT( graphene::chain::legacy::fee_parameters_type< " << optype << " >, ";
       ctx->sv_out << "fee_parameters_type< " << optype << " >";
-      ctx->apply_out.clear();
+      ctx->apply_out.str("");
 
       ctx->out << "template<>\n"
          "struct fee_parameters_type< " << optype << " >\n"
