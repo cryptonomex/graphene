@@ -28,6 +28,7 @@
 
 #include <fc/reflect/reflect.hpp>
 
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 
