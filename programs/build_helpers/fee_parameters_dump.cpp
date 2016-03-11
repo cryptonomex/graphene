@@ -104,7 +104,7 @@ struct dump_fee_struct_visitor
 
       ctx->out << "template<>\n"
          "struct fee_parameters_type< " << optype << " >\n"
-         "{\n"
+         "{\n";
       fc::reflector<Op::fee_parameters_type>::visit( vtor );
       ctx->out << "};\n\n";
 
