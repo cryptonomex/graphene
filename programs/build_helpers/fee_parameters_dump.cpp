@@ -41,11 +41,11 @@ uint64_t convert_to_string( const T& t )
 }
 
 
-template<> uint64_t convert_to_string< uint8_t    >( uint8_t    x )   {  return x;   }
-template<> uint64_t convert_to_string< uint16_t   >( uint16_t   x )   {  return x;   }
-template<> uint64_t convert_to_string< uint32_t   >( uint32_t   x )   {  return x;   }
-template<> uint64_t convert_to_string< uint64_t   >( uint64_t   x )   {  return x;   }
-template<> uint64_t convert_to_string< share_type >( share_type x )
+template<> uint64_t convert_to_string< uint8_t    >( const uint8_t&    x )   {  return x;   }
+template<> uint64_t convert_to_string< uint16_t   >( const uint16_t&   x )   {  return x;   }
+template<> uint64_t convert_to_string< uint32_t   >( const uint32_t&   x )   {  return x;   }
+template<> uint64_t convert_to_string< uint64_t   >( const uint64_t&   x )   {  return x;   }
+template<> uint64_t convert_to_string< share_type >( const share_type& x )
 {
    FC_ASSERT( x.value >= 0 );
    return uint64_t( x.value );
