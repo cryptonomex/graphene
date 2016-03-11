@@ -44,11 +44,13 @@ uint64_t convert_to_string( const T& t )
    static_assert( false, "generic convert_to_string() not allowed (fee_parameter_type contains member of unexpected type)" );
 }
 
+using graphene::chain::share_type;
+
 template<> uint64_t convert_to_string< uint8_t    >( const uint8_t&    x )   {  return x;   }
 template<> uint64_t convert_to_string< uint16_t   >( const uint16_t&   x )   {  return x;   }
 template<> uint64_t convert_to_string< uint32_t   >( const uint32_t&   x )   {  return x;   }
 template<> uint64_t convert_to_string< uint64_t   >( const uint64_t&   x )   {  return x;   }
-template<> uint64_t convert_to_string< share_type >( const graphene::chain::share_type& x )
+template<> uint64_t convert_to_string< share_type >( const share_type& x )
 {
    FC_ASSERT( x.value >= 0 );
    return uint64_t( x.value );
