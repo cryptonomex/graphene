@@ -79,17 +79,27 @@ struct dump_fee_member_visitor
       uint64_t default_amount_satoshis = convert_to_string< Member >( c.*member );
       uint64_t default_amount_units = default_amount_satoshis / GRAPHENE_BLOCKCHAIN_PRECISION;
       std::string default_amount_string;
+      std::string default_amount_suffix;
       if( default_amount_satoshis == 0 )
+      {
          default_amount_string = "0";
+         default_amount_suffix = "";
+      }
       else if( 0 == (default_amount_satoshis % GRAPHENE_BLOCKCHAIN_PRECISION) )
-         default_amount_string = fc::to_string( default_amount_units ) + " * GRAPHENE_BLOCKCHAIN_PRECISION";
+      {
+         default_amount_string = fc::to_string( default_amount_units );
+         default_amount_suffix = " * GRAPHENE_BLOCKCHAIN_PRECISION";
+      }
       else
+      {
          default_amount_string = fc::to_string( default_amount_satoshis );
+         default_amount_suffix = "";
+      }
       std::string str_amount = fc::to_string( default_amount_units );
       ctx->out << "   " << std::left << std::setw( 10 ) << mtype
         << " " << std::left << std::setw( 25 ) << mname
         << " = " << std::right << std::setw( 6 ) << default_amount_string
-        << ";\n";
+        << default_amount_suffix << ";\n";
       ctx->reflect_out << "(" << name << ")";
    }
 
