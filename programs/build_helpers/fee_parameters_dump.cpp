@@ -117,7 +117,7 @@ struct dump_fee_struct_visitor
 
 } }
 
-int main( int argc, char** argv, char** envp )
+void _main()
 {
    std::stringstream out;
    std::stringstream reflect_out;
@@ -134,6 +134,20 @@ int main( int argc, char** argv, char** envp )
    }
 
    std::cout << out.str() << "\n" << reflect_out.str();
+   return;
+}
+
+int main( int argc, char** argv, char** envp )
+{
+   try
+   {
+      _main();
+   }
+   catch( const fc::exception& e )
+   {
+      std::cerr << e.to_detail_string() << std::endl;
+      return 1;
+   }
 
    return 0;
 }
