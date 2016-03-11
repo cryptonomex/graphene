@@ -71,7 +71,7 @@ struct dump_fee_member_visitor
       Class c;
       uint64_t default_amount_satoshis = convert_to_string< Member >( c.*member );
       FC_ASSERT( 0 == (default_amount % GRAPHENE_BLOCKCHAIN_PRECISION) );
-      uint64_t default_amount_units = default_amount / GRAPHENE_BLOCKCHAIN_PRECISION;
+      uint64_t default_amount_units = default_amount_satoshis / GRAPHENE_BLOCKCHAIN_PRECISION;
       std::string str_amount = default_amount_units;
       ctx.out << "   " << std::left << std::setw( 10 ) << mtype
         << " " << std::left << std::setw( 25 ) << mname
