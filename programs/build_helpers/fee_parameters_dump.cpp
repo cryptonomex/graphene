@@ -168,7 +168,7 @@ void _main()
       op.visit( vtor );
    }
 
-   std::cout << out.str() << "\n" << reflect_out.str();
+   std::cout << out.str() << "\n" << reflect_out.str() << "\n" << sv_out.str();
    return;
 }
 
