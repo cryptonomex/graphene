@@ -89,7 +89,7 @@ struct dump_fee_member_visitor
       ctx->out << "   " << std::left << std::setw( 10 ) << mtype
         << " " << std::left << std::setw( 25 ) << mname
         << " = " << std::right << std::setw( 6 ) << default_amount_string
-        << " * GRAPHENE_BLOCKCHAIN_PRECISION;\n";
+        << ";\n";
       ctx->reflect_out << "(" << name << ")";
    }
 
