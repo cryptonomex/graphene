@@ -118,13 +118,13 @@ struct dump_fee_struct_visitor
 
 int main( int argc, char** argv, char** envp )
 {
-   graphene::chain::operation op;
-   graphene::fee_parameters_dump::dump_fee_struct_visitor vtor;
-
    std::stringstream out;
    std::stringstream reflect_out;
    std::shared_ptr< graphene::fee_parameters_dump::context > ctx =
       std::make_shared< graphene::fee_parameters_dump::context >( out, reflect_out );
+
+   graphene::fee_parameters_dump::dump_fee_struct_visitor vtor(ctx);
+   graphene::chain::operation op;
 
    for( int which=0; which<op.count(); which++ )
    {
