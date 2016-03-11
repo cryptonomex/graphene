@@ -106,7 +106,7 @@ struct dump_fee_member_visitor
         << " = " << std::right << std::setw( 6 ) << default_amount_string
         << default_amount_suffix << ";\n";
       ctx->reflect_out << "(" << name << ")";
-      ctx->apply_out << "      fp." << name << " = " name << ";\n";
+      ctx->apply_out << "      fp." << name << " = " << name << ";\n";
    }
 
    std::shared_ptr< context > ctx;
