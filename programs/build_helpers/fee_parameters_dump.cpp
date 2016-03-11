@@ -74,6 +74,8 @@ struct dump_fee_member_visitor
    void operator()( const char* name )const
    {
       std::string mtype = fc::get_typename<Member>::name();
+      if( mtype == "graphene::chain::share_type" )
+         mtype = "share_type";
       std::string mname = name;
       Class c;
       uint64_t default_amount_satoshis = convert_to_string< Member >( c.*member );
