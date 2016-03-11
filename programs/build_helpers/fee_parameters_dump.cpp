@@ -26,6 +26,7 @@
 #include <graphene/chain/protocol/protocol.hpp>
 #include <graphene/chain/protocol/operations.hpp>
 
+#include <fc/smart_ref_impl.hpp>
 #include <fc/reflect/reflect.hpp>
 
 #include <iomanip>
