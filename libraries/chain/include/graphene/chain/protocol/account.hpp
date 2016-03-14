@@ -285,10 +285,10 @@ FC_REFLECT( graphene::chain::account_upgrade_operation,
 
 FC_REFLECT( graphene::chain::account_whitelist_operation, (fee)(authorizing_account)(account_to_list)(new_listing)(extensions))
 
-FC_REFLECT( graphene::chain::account_create_operation::fee_parameters_type, (basic_fee)(premium_fee)(price_per_kbyte) )
-FC_REFLECT( graphene::chain::account_whitelist_operation::fee_parameters_type, (fee) )
-FC_REFLECT( graphene::chain::account_update_operation::fee_parameters_type, (fee)(price_per_kbyte) )
-FC_REFLECT( graphene::chain::account_upgrade_operation::fee_parameters_type, (membership_annual_fee)(membership_lifetime_fee) )
-FC_REFLECT( graphene::chain::account_transfer_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::account_create_operation::fee_parameters_type, (basic_fee)(premium_fee)(price_per_kbyte) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::account_whitelist_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::account_update_operation::fee_parameters_type, (fee)(price_per_kbyte) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::account_upgrade_operation::fee_parameters_type, (membership_annual_fee)(membership_lifetime_fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::account_transfer_operation::fee_parameters_type, (fee) )
 
 FC_REFLECT( graphene::chain::account_transfer_operation, (fee)(account_id)(new_owner)(extensions) )

@@ -25,7 +25,7 @@
 #include <graphene/chain/protocol/base.hpp>
 #include <graphene/chain/protocol/memo.hpp>
 
-namespace graphene { namespace chain { 
+namespace graphene { namespace chain {
 
    bool is_valid_symbol( const string& symbol );
 
@@ -190,9 +190,9 @@ namespace graphene { namespace chain {
     */
    struct asset_settle_operation : public base_operation
    {
-      struct fee_parameters_type { 
+      struct fee_parameters_type {
          /** this fee should be high to encourage small settlement requests to
-          * be performed on the market rather than via forced settlement. 
+          * be performed on the market rather than via forced settlement.
           *
           * Note that in the event of a black swan or prediction market close out
           * everyone will have to pay this fee.
@@ -446,7 +446,7 @@ namespace graphene { namespace chain {
 } } // graphene::chain
 
 FC_REFLECT( graphene::chain::asset_claim_fees_operation, (fee)(issuer)(amount_to_claim)(extensions) )
-FC_REFLECT( graphene::chain::asset_claim_fees_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_claim_fees_operation::fee_parameters_type, (fee) )
 
 FC_REFLECT( graphene::chain::asset_options,
             (max_supply)
@@ -473,17 +473,17 @@ FC_REFLECT( graphene::chain::bitasset_options,
           )
 
 
-FC_REFLECT( graphene::chain::asset_create_operation::fee_parameters_type, (symbol3)(symbol4)(long_symbol)(price_per_kbyte) )
-FC_REFLECT( graphene::chain::asset_global_settle_operation::fee_parameters_type, (fee) )
-FC_REFLECT( graphene::chain::asset_settle_operation::fee_parameters_type, (fee) )
-FC_REFLECT( graphene::chain::asset_settle_cancel_operation::fee_parameters_type, )
-FC_REFLECT( graphene::chain::asset_fund_fee_pool_operation::fee_parameters_type, (fee) )
-FC_REFLECT( graphene::chain::asset_update_operation::fee_parameters_type, (fee)(price_per_kbyte) )
-FC_REFLECT( graphene::chain::asset_update_bitasset_operation::fee_parameters_type, (fee) )
-FC_REFLECT( graphene::chain::asset_update_feed_producers_operation::fee_parameters_type, (fee) )
-FC_REFLECT( graphene::chain::asset_publish_feed_operation::fee_parameters_type, (fee) )
-FC_REFLECT( graphene::chain::asset_issue_operation::fee_parameters_type, (fee)(price_per_kbyte) )
-FC_REFLECT( graphene::chain::asset_reserve_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_create_operation::fee_parameters_type, (symbol3)(symbol4)(long_symbol)(price_per_kbyte) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_global_settle_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_settle_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_settle_cancel_operation::fee_parameters_type, )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_fund_fee_pool_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_update_operation::fee_parameters_type, (fee)(price_per_kbyte) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_update_bitasset_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_update_feed_producers_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_publish_feed_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_issue_operation::fee_parameters_type, (fee)(price_per_kbyte) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::asset_reserve_operation::fee_parameters_type, (fee) )
 
 
 FC_REFLECT( graphene::chain::asset_create_operation,

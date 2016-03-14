@@ -89,4 +89,38 @@ void_result committee_member_update_global_parameters_evaluator::do_apply(const 
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
 
+void_result committee_member_update_parameter_operation::do_evaluate( const committee_member_update_parameter_operation& op )
+{
+}
+
+void_result committee_member_update_parameter_operation::do_apply( const committee_member_update_parameter_operation& op )
+{
+   database& _db = db();
+
+   switch( which_target_space.value )
+   {
+      case target_space_parameters:
+      {
+         _db.create< update_parameter_object >( [&]( update_parameter_object& upo )
+         {
+            upo.param_id = op.param1;
+            upo.new_value = op.new_value;
+         };
+         break;
+      }
+      case target_space_fees:
+      {
+         _db.create< update_fee_object >( [&]( update_fee_object& ufo )
+         {
+            ufo.op_id = op.param1;
+            ufo.fee_id = op.param2;
+            ufo.new_value = op.new_value;
+         };
+         break;
+      }
+      default:
+         FC_ASSERT( false );
+   }
+}
+
 } } // graphene::chain

@@ -25,7 +25,7 @@
 #include <graphene/chain/protocol/base.hpp>
 #include <graphene/chain/protocol/chain_parameters.hpp>
 
-namespace graphene { namespace chain { 
+namespace graphene { namespace chain {
 
    /**
     * @brief Create a committee_member object, as a bid to hold a committee_member seat on the network.
@@ -69,38 +69,53 @@ namespace graphene { namespace chain {
       void            validate()const;
    };
 
-   /**
-    * @brief Used by committee_members to update the global parameters of the blockchain.
-    * @ingroup operations
-    *
-    * This operation allows the committee_members to update the global parameters on the blockchain. These control various
-    * tunable aspects of the chain, including block and maintenance intervals, maximum data sizes, the fees charged by
-    * the network, etc.
-    *
-    * This operation may only be used in a proposed transaction, and a proposed transaction which contains this
-    * operation must have a review period specified in the current global parameters before it may be accepted.
-    */
-   struct committee_member_update_global_parameters_operation : public base_operation
+   /// TODO: committee_member_resign_operation : public base_operation
+
+   struct committee_member_update_parameter_operation : public base_operation
    {
       struct fee_parameters_type { uint64_t fee = GRAPHENE_BLOCKCHAIN_PRECISION; };
 
-      asset             fee;
-      chain_parameters  new_parameters;
+      enum target_space
+      {
+         /**
+          * Update a chain parameter.  param1 = Identity of parameter to update, param2 = 0 (reserved)
+          */
+         target_space_parameters = 0,
 
-      account_id_type fee_payer()const { return account_id_type(); }
-      void            validate()const;
+         /**
+          * Update a fee.  param1 = Which operation to update, param2 = Which op-specific fee parameter to update
+          */
+         target_space_fees = 1
+      };
+
+      asset                                 fee;
+
+      /// A target_space enum value indicating the space
+      unsigned_int                          which_target_space = 0;
+
+      /// A value indicating which op's fee to update. (or which parameter to update)
+      unsigned_int                          param1 = 0;
+
+      /// A value indicating which fee parameter of the op needs updating. (or 0 for parameter update)
+      unsigned_int                          param2 = 0;
+
+      /// The new value.  Must be in range for the given parameter.
+      uint64_t                              new_value = 0;
+
+      extensions_type                       extensions;
    };
-
-   /// TODO: committee_member_resign_operation : public base_operation
 
 } } // graphene::chain
 FC_REFLECT( graphene::chain::committee_member_create_operation::fee_parameters_type, (fee) )
 FC_REFLECT( graphene::chain::committee_member_update_operation::fee_parameters_type, (fee) )
-FC_REFLECT( graphene::chain::committee_member_update_global_parameters_operation::fee_parameters_type, (fee) )
+FC_REFLECT( graphene::chain::committee_member_update_parameter_operation::fee_parameters_type, (fee) )
 
+FC_REFLECT_ENUM( graphene::chain::committee_member_update_parameter_operation::target_space,
+                 (target_space_parameters)(target_space_fees) )
 
 FC_REFLECT( graphene::chain::committee_member_create_operation,
             (fee)(committee_member_account)(url) )
 FC_REFLECT( graphene::chain::committee_member_update_operation,
             (fee)(committee_member)(committee_member_account)(new_url) )
-FC_REFLECT( graphene::chain::committee_member_update_global_parameters_operation, (fee)(new_parameters) );
+FC_REFLECT( graphene::chain::committee_member_update_parameter_operation,
+            (fee)(which_target_space)(param1)(param2)(new_value)(extensions) )

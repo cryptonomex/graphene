@@ -24,7 +24,7 @@
 #pragma once
 #include <graphene/chain/protocol/base.hpp>
 
-namespace graphene { namespace chain { 
+namespace graphene { namespace chain {
 
    /**
     *  Used to verify that account_id->name is equal to the given string literal.
@@ -105,10 +105,10 @@ namespace graphene { namespace chain {
 
 } } // graphene::chain
 
-FC_REFLECT( graphene::chain::assert_operation::fee_parameters_type, (fee) )
+GRAPHENE_REFLECT_IMAP( graphene::chain::assert_operation::fee_parameters_type, (fee) )
 FC_REFLECT( graphene::chain::account_name_eq_lit_predicate, (account_id)(name) )
 FC_REFLECT( graphene::chain::asset_symbol_eq_lit_predicate, (asset_id)(symbol) )
 FC_REFLECT( graphene::chain::block_id_predicate, (id) )
 FC_REFLECT_TYPENAME( graphene::chain::predicate )
 FC_REFLECT( graphene::chain::assert_operation, (fee)(fee_paying_account)(predicates)(required_auths)(extensions) )
- 
+
