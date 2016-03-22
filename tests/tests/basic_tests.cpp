@@ -410,4 +410,15 @@ BOOST_AUTO_TEST_CASE( merkle_root )
    BOOST_CHECK( block.calculate_merkle_root() == c(dO) );
 }
 
+BOOST_AUTO_TEST_CASE( public_key_ordering )
+{
+   auto ka = generate_private_key("a");
+   auto kb = generate_private_key("b");
+
+   public_key_type pa = ka.get_public_key();
+   public_key_type pb = kb.get_public_key();
+
+   bool x = (pa < pb);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
