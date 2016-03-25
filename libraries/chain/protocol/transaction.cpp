@@ -193,7 +193,10 @@ struct sign_state
             if( approved_by.find(a.first) == approved_by.end() )
             {
                if( depth == max_recursion )
-                  return false;
+               {
+                  fails_before_631 = true;
+                  continue;
+               }
                if( check_authority( get_active( a.first ), depth+1 ) )
                {
                   approved_by.insert( a.first );
@@ -240,6 +243,7 @@ struct sign_state
       flat_map<public_key_type,bool>   provided_signatures;
       flat_set<account_id_type>        approved_by;
       uint32_t                         max_recursion = GRAPHENE_MAX_SIG_CHECK_DEPTH;
+      bool                             fails_before_631 = false;
 };
 
 
@@ -247,7 +251,7 @@ void verify_authority( const vector<operation>& ops, const flat_set<public_key_t
                        const std::function<const authority*(account_id_type)>& get_active,
                        const std::function<const authority*(account_id_type)>& get_owner,
                        uint32_t max_recursion_depth,
-                       bool  allow_committe,
+                       uint32_t flags,
                        const flat_set<account_id_type>& active_aprovals,
                        const flat_set<account_id_type>& owner_approvals )
 { try {
@@ -258,7 +262,7 @@ void verify_authority( const vector<operation>& ops, const flat_set<public_key_t
    for( const auto& op : ops )
       operation_get_required_authorities( op, required_active, required_owner, other );
 
-   if( !allow_committe )
+   if( ((flags & verify_authority_flags::allow_committee) == 0) )
       GRAPHENE_ASSERT( required_active.find(GRAPHENE_COMMITTEE_ACCOUNT) == required_active.end(),
                        invalid_committee_approval, "Committee account may only propose transactions" );
 
@@ -294,6 +298,12 @@ void verify_authority( const vector<operation>& ops, const flat_set<public_key_t
       tx_irrelevant_sig,
       "Unnecessary signature(s) detected"
       );
+
+   if( (flags & verify_authority_flags::before_hardfork_631) != 0 )
+   {
+      FC_ASSERT( !s.fails_before_631 );
+   }
+
 } FC_CAPTURE_AND_RETHROW( (ops)(sigs) ) }
 
 
@@ -352,7 +362,8 @@ set<public_key_type> signed_transaction::minimize_required_signatures(
    const flat_set<public_key_type>& available_keys,
    const std::function<const authority*(account_id_type)>& get_active,
    const std::function<const authority*(account_id_type)>& get_owner,
-   uint32_t max_recursion
+   uint32_t max_recursion,
+   uint32_t verify_authority_flags
    ) const
 {
    set< public_key_type > s = get_required_signatures( chain_id, available_keys, get_active, get_owner, max_recursion );
@@ -363,7 +374,7 @@ set<public_key_type> signed_transaction::minimize_required_signatures(
       result.erase( k );
       try
       {
-         graphene::chain::verify_authority( operations, result, get_active, get_owner, max_recursion );
+         graphene::chain::verify_authority( operations, result, get_active, get_owner, max_recursion, verify_authority_flags );
          continue;  // element stays erased if verify_authority is ok
       }
       catch( const tx_missing_owner_auth& e ) {}
@@ -378,9 +389,10 @@ void signed_transaction::verify_authority(
    const chain_id_type& chain_id,
    const std::function<const authority*(account_id_type)>& get_active,
    const std::function<const authority*(account_id_type)>& get_owner,
-   uint32_t max_recursion )const
+   uint32_t max_recursion,
+   uint32_t verify_authority_flags )const
 { try {
-   graphene::chain::verify_authority( operations, get_signature_keys( chain_id ), get_active, get_owner, max_recursion );
+   graphene::chain::verify_authority( operations, get_signature_keys( chain_id ), get_active, get_owner, max_recursion, verify_authority_flags );
 } FC_CAPTURE_AND_RETHROW( (*this) ) }
 
 } } // graphene::chain

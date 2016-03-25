@@ -24,6 +24,7 @@
 
 #include <graphene/app/database_api.hpp>
 #include <graphene/chain/get_config.hpp>
+#include <graphene/chain/hardfork.hpp>
 
 #include <fc/bloom_filter.hpp>
 #include <fc/smart_ref_impl.hpp>
@@ -1565,10 +1566,14 @@ bool database_api::verify_authority( const signed_transaction& trx )const
 
 bool database_api_impl::verify_authority( const signed_transaction& trx )const
 {
+   uint32_t flags = 0;
+   if( _db.head_block_time() <= HARDFORK_631_TIME )
+      flags |= verify_authority_flags::before_hardfork_631;
    trx.verify_authority( _db.get_chain_id(),
                          [&]( account_id_type id ){ return &id(_db).active; },
                          [&]( account_id_type id ){ return &id(_db).owner; },
-                          _db.get_global_properties().parameters.max_authority_depth );
+                         _db.get_global_properties().parameters.max_authority_depth,
+                         flags );
    return true;
 }
 

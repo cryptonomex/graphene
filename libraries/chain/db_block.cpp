@@ -591,9 +591,13 @@ processed_transaction database::_apply_transaction(const signed_transaction& trx
 
    if( !(skip & (skip_transaction_signatures | skip_authority_check) ) )
    {
+      uint32_t flags = 0;
+      if( head_block_time() <= HARDFORK_631_TIME )
+         flags |= verify_authority_flags::before_hardfork_631;
+
       auto get_active = [&]( account_id_type id ) { return &id(*this).active; };
       auto get_owner  = [&]( account_id_type id ) { return &id(*this).owner;  };
-      trx.verify_authority( chain_id, get_active, get_owner, get_global_properties().parameters.max_authority_depth );
+      trx.verify_authority( chain_id, get_active, get_owner, get_global_properties().parameters.max_authority_depth, flags );
    }
 
    //Skip all manner of expiration and TaPoS checking if we're on block 1; It's impossible that the transaction is

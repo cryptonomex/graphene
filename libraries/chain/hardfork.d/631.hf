@@ -1,0 +1,4 @@
+// #631 Fix price feed expiration check, so websocket server will never spam too much data
+#ifndef HARDFORK_631_TIME
+#define HARDFORK_631_TIME (fc::time_point_sec( 1459789200 ))
+#endif
