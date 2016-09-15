@@ -1313,4 +1313,27 @@ BOOST_FIXTURE_TEST_CASE( nonminimal_sig_test, database_fixture )
    }
 }
 
+BOOST_AUTO_TEST_CASE( custom_operation_required_auths ) {
+   try {
+      ACTORS((alice)(bob));
+      fund(alice);
+      enable_fees();
+
+      signed_transaction trx;
+      custom_operation op;
+      op.payer = alice_id;
+      op.required_auths.insert(bob_id);
+      op.fee = op.calculate_fee(db.current_fee_schedule().get<custom_operation>());
+      trx.operations.emplace_back(op);
+      trx.set_expiration(db.head_block_time() + 30);
+      sign(trx, alice_private_key);
+      GRAPHENE_REQUIRE_THROW(db.push_transaction(trx), tx_missing_active_auth);
+      sign(trx, bob_private_key);
+      PUSH_TX(db, trx);
+   } catch (fc::exception& e) {
+      edump((e.to_detail_string()));
+      throw;
+   }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
