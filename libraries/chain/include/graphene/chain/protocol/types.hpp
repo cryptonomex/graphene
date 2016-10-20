@@ -100,6 +100,13 @@ namespace graphene { namespace chain {
       |witness_fed_asset|committee_fed_asset;
    const static uint32_t UIA_ASSET_ISSUER_PERMISSION_MASK = charge_market_fee|white_list|override_authority|transfer_restricted|disable_confidential;
 
+   enum account_membership
+   {
+      basic_account   = 0,
+      lifetime_member = 1,
+      annual_member   = 2
+   };
+
    enum reserved_spaces
    {
       relative_protocol_ids = 0,
@@ -403,4 +410,10 @@ FC_REFLECT_ENUM( graphene::chain::asset_issuer_permission_flags,
    (disable_confidential)
    (witness_fed_asset)
    (committee_fed_asset)
+   )
+
+FC_REFLECT_ENUM( graphene::chain::account_membership,
+   (basic_account)
+   (lifetime_member)
+   (annual_member)
    )

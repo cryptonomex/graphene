@@ -110,6 +110,32 @@ void account_statistics_object::pay_fee( share_type core_fee, share_type cashbac
       pending_vested_fees += core_fee;
 }
 
+fc::uint128_t account_statistics_object::compute_coin_seconds_earned(const asset& balance, fc::time_point_sec now)const
+{
+   if( now <= coin_seconds_earned_last_update )
+      return coin_seconds_earned;
+   int64_t delta_seconds = (now - coin_seconds_earned_last_update).to_seconds();
+
+   fc::uint128_t delta_coin_seconds = balance.amount.value;
+   delta_coin_seconds *= delta_seconds;
+
+   return (coin_seconds_earned + delta_coin_seconds);
+}
+
+void account_statistics_object::update_coin_seconds_earned(const asset& balance, fc::time_point_sec now)
+{
+   if( now <= coin_seconds_earned_last_update )
+      return;
+   coin_seconds_earned = compute_coin_seconds_earned(balance, now);
+   coin_seconds_earned_last_update = now;
+}
+
+void account_statistics_object::set_coin_seconds_earned(const fc::uint128_t new_coin_seconds, fc::time_point_sec now)
+{
+   coin_seconds_earned = new_coin_seconds;
+   coin_seconds_earned_last_update = now;
+}
+
 set<account_id_type> account_member_index::get_account_members(const account_object& a)const
 {
    set<account_id_type> result;

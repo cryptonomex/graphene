@@ -943,4 +943,544 @@ BOOST_AUTO_TEST_CASE( stealth_fba_test )
    }
 }
 
+///////////////////////////////////
+// coin_seconds_as_fee_test
+///////////////////////////////////
+struct actor_coin_seconds_audit
+{
+   uint64_t b0 = 0;           // starting balance parameter
+   uint64_t bal = 0;          // balance should be this
+   uint64_t csrate = 1;       // rate of coin seconds -> fees
+   fc::uint128_t cs = 0;      // coin seconds earned
+   fc::uint128_t ccs = 0;     // cap of coins seconds as fees
+   fc::uint128_t ecs = 0;     // effective coin seconds earned (after capped)
+   uint64_t ecsfee = 0;       // effective fees can be paid by coin seconds
+};
+
+#define UPDATE_ECS_AUDITOR( actor_name ) \
+   if( actor_name ## _id != account_id_type() ) {                                   \
+      a_ ## actor_name.ecs = std::min( a_ ## actor_name.cs, a_ ## actor_name.ccs ); \
+      fc::uint128_t ecsfee ( a_ ## actor_name.ecs );                                \
+      ecsfee /= a_ ## actor_name.csrate;                                            \
+      a_ ## actor_name.ecsfee = ecsfee.to_uint64();                                 \
+   }
+
+#define UPDATE_CS_AUDITOR( actor_name, seconds ) \
+   if( actor_name ## _id != account_id_type() ) {                                   \
+      fc::uint128_t cs_new ( a_ ## actor_name.bal );                                \
+      cs_new *= seconds;                                                            \
+      a_ ## actor_name.cs += cs_new;                                                \
+      UPDATE_ECS_AUDITOR( actor_name );                                             \
+   }
+
+#define CHECK_COIN_SECONDS_EARNED( actor_name, amount ) \
+   BOOST_CHECK( actor_name ## _id(db).statistics(db).compute_coin_seconds_earned(                 \
+                  db.get_balance( actor_name ## _id, asset_id_type() ), db.head_block_time() )    \
+               == amount )
+
+#define CoinSecondsAuditActor(actor_name)                                        \
+   if( actor_name ## _id != account_id_type() )                                  \
+   {                                                                             \
+      CHECK_BALANCE( actor_name, a_ ## actor_name.bal );                         \
+      CHECK_COIN_SECONDS_EARNED( actor_name, a_ ## actor_name.cs );              \
+   }
+
+#define ENABLE_FEES_FOR_COIN_SECONDS_TEST \
+      {                                                                         \
+         enable_fees();                                                         \
+         flat_set< fee_parameters > new_fees;                                   \
+         {                                                                      \
+            transfer_operation::fee_parameters_type transfer_fee_params;        \
+            transfer_fee_params.fee = transfer_fee;                             \
+            new_fees.insert( transfer_fee_params );                             \
+         }                                                                      \
+         change_fees( new_fees );                                               \
+      }
+
+// update coin_seconds_as_fee options
+#define UPDATE_GLOBAL_CS_FEE_OPTIONS \
+   {\
+      graphene::chain::chain_parameters::ext::coin_seconds_as_fees_options cs_fee_options;\
+      /* fee rate: { basic_account, lifetime_member, annual_member } */\
+      cs_fee_options.coin_seconds_as_fees_rate = { cs_fee_rate_basic_account,\
+                                                 cs_fee_rate_lifetime_member,\
+                                                 cs_fee_rate_annual_member };\
+      /* fee cap: { basic_account, lifetime_member, annual_member } */\
+      cs_fee_options.max_accumulated_fees_from_coin_seconds = { max_cs_fee_basic_account,\
+                                                              max_cs_fee_lifetime_member,\
+                                                              max_cs_fee_annual_member };\
+      /* transfer fee cap */\
+      cs_fee_options.max_fee_from_coin_seconds_by_operation = { max_cs_as_transfer_fee };\
+      /* apply changes */\
+      db.modify(global_property_id_type()(db), [&](global_property_object& gpo)\
+      {\
+         gpo.parameters.block_interval = block_interval;\
+         gpo.parameters.maintenance_interval = block_interval;\
+         gpo.parameters.maintenance_skip_slots = 0;\
+         graphene::chain::chain_parameters::parameter_extension e = cs_fee_options;\
+         gpo.parameters.extensions.clear();\
+         gpo.parameters.extensions.emplace_hint( gpo.parameters.extensions.end(), e );\
+      });\
+      ccs_basic_account  = max_cs_fee_basic_account;\
+      ccs_basic_account *= cs_fee_rate_basic_account;\
+      ccs_lifetime_member  = max_cs_fee_lifetime_member;\
+      ccs_lifetime_member *= cs_fee_rate_lifetime_member;\
+      ccs_annual_member  = max_cs_fee_annual_member;\
+      ccs_annual_member *= cs_fee_rate_annual_member;\
+      ccs_basic_account_x2 = ccs_basic_account;\
+      ccs_basic_account_x2 *= 2;\
+      ccs_lifetime_member_x2 = ccs_lifetime_member;\
+      ccs_lifetime_member_x2 *= 2;\
+      ccs_annual_member_x2 = ccs_annual_member;\
+      ccs_annual_member_x2 *= 2;\
+   }
+
+BOOST_AUTO_TEST_CASE( coin_seconds_as_fee_test )
+{ try {
+
+   ACTORS((mil)(geo)(bot)(you)(umi)(car));
+
+   actor_coin_seconds_audit a_mil, a_geo, a_bot, a_you, a_umi, a_car;
+   a_mil.b0 = 0;
+   a_geo.b0 = 100000;
+   a_bot.b0 = 100000;
+   a_you.b0 = 100000;
+   a_umi.b0 = 0;
+   a_car.b0 = 0;
+
+   uint64_t transfer_fee = 2000;
+   uint64_t max_cs_as_transfer_fee = transfer_fee; // initial transfer fee cap is 100%
+
+   uint64_t block_interval = 1;
+
+   uint64_t cs_fee_rate_basic_account   = 100 * 11; // 100 Satoshi of CORE * 11 seconds -> 1 Satoshi of CORE of fee
+   uint64_t cs_fee_rate_lifetime_member = 100 * 3;
+   uint64_t cs_fee_rate_annual_member   = 100 * 7;
+
+   uint64_t max_cs_fee_basic_account   = 2000; // set it to be >= transfer_fee
+   uint64_t max_cs_fee_lifetime_member = 13000;
+   uint64_t max_cs_fee_annual_member   = 5000;
+
+   fc::uint128_t ccs_basic_account;
+   fc::uint128_t ccs_lifetime_member;
+   fc::uint128_t ccs_annual_member;
+   fc::uint128_t ccs_basic_account_x2;
+   fc::uint128_t ccs_lifetime_member_x2;
+   fc::uint128_t ccs_annual_member_x2;
+
+   BOOST_TEST_MESSAGE( "Generate block 1" );
+   generate_block();
+
+   BOOST_TEST_MESSAGE( "Update Global fee options" );
+   UPDATE_GLOBAL_CS_FEE_OPTIONS;
+
+   asset fee_0   ( 0 );
+   asset fee_50  ( transfer_fee / 2 );
+   asset fee_100 ( transfer_fee );
+
+   // upgrade geo to lifetime member, and upgrade bot to annual member which is valid for 9 years
+   upgrade_to_lifetime_member( geo_id );
+   for( int i = 0; i < 9; i++ )
+      upgrade_to_annual_member( bot_id );
+
+   a_mil.csrate = cs_fee_rate_basic_account;
+   a_geo.csrate = cs_fee_rate_lifetime_member;
+   a_bot.csrate = cs_fee_rate_annual_member;
+   a_you.csrate = cs_fee_rate_basic_account;
+   a_umi.csrate = cs_fee_rate_basic_account;
+   a_car.csrate = cs_fee_rate_basic_account;
+
+   a_mil.ccs = ccs_basic_account;
+   a_geo.ccs = ccs_lifetime_member;
+   a_bot.ccs = ccs_annual_member;
+   a_you.ccs = ccs_basic_account;
+   a_umi.ccs = ccs_basic_account;
+   a_car.ccs = ccs_basic_account;
+
+   // ecs and ecsfee are 0 at the beginning
+
+#define UPDATE_CS_AUDITORS( seconds )    \
+   {                                     \
+      UPDATE_CS_AUDITOR( mil, seconds ); \
+      UPDATE_CS_AUDITOR( geo, seconds ); \
+      UPDATE_CS_AUDITOR( bot, seconds ); \
+      UPDATE_CS_AUDITOR( you, seconds ); \
+      UPDATE_CS_AUDITOR( umi, seconds ); \
+      UPDATE_CS_AUDITOR( car, seconds ); \
+   }
+
+#define CoinSecondsAudit()                           \
+   {                                                 \
+      CoinSecondsAuditActor( mil );                  \
+      CoinSecondsAuditActor( geo );                  \
+      CoinSecondsAuditActor( bot );                  \
+      CoinSecondsAuditActor( you );                  \
+      CoinSecondsAuditActor( umi );                  \
+      CoinSecondsAuditActor( car );                  \
+   }
+
+   auto transfer_test = [&]( account_id_type from, account_id_type to, asset amount, asset fee, fc::ecc::private_key pk )
+   {
+      transfer_operation transfer_op;
+      transfer_op.from = from;
+      transfer_op.to = to;
+      transfer_op.amount = amount;
+      transfer_op.fee = fee;
+      signed_transaction tx;
+      tx.operations.push_back( transfer_op );
+      set_expiration( db, tx );
+      sign( tx, pk );
+      PUSH_TX( db, tx );
+   };
+
+   // init funds
+   transfer( account_id_type(), geo_id, asset(a_geo.b0) );
+   a_geo.bal += a_geo.b0;
+   transfer( account_id_type(), bot_id, asset(a_bot.b0) );
+   a_bot.bal += a_bot.b0;
+   transfer( account_id_type(), you_id, asset(a_you.b0) );
+   a_you.bal += a_you.b0;
+
+   BOOST_TEST_MESSAGE( "Init finished" );
+
+   // first check
+   CoinSecondsAudit();
+
+   BOOST_TEST_MESSAGE( "Generate block 2" );
+   uint32_t skip = database::skip_witness_signature
+                 | database::skip_transaction_signatures
+                 | database::skip_transaction_dupe_check
+                 | database::skip_block_size_check
+                 | database::skip_tapos_check
+                 | database::skip_authority_check
+                 | database::skip_merkle_check
+                 ;
+   generate_block( skip );
+
+   // before hard fork time, and at hard fork time all coin_seconds_earned == 0
+   BOOST_TEST_MESSAGE( "Generate blocks to hard fork 603 time" );
+   for( int i = -5; i <= 0; i++ )
+   {
+      BOOST_TEST_MESSAGE( "round " << (i) << " begin" );
+      generate_blocks( HARDFORK_603_TIME + block_interval * i, true, skip );
+      CoinSecondsAudit();
+
+      // enable fees
+      ENABLE_FEES_FOR_COIN_SECONDS_TEST;
+
+      // no coin seconds can be used as fees
+      BOOST_TEST_MESSAGE( "testing 0 fee" );
+      GRAPHENE_REQUIRE_THROW( transfer_test( geo_id, mil_id, asset(1), fee_0, geo_private_key ), insufficient_fee );
+      GRAPHENE_REQUIRE_THROW( transfer_test( bot_id, mil_id, asset(1), fee_0, bot_private_key ), insufficient_fee );
+      GRAPHENE_REQUIRE_THROW( transfer_test( you_id, mil_id, asset(1), fee_0, you_private_key ), insufficient_fee );
+      BOOST_TEST_MESSAGE( "testing half fee" );
+      GRAPHENE_REQUIRE_THROW( transfer_test( geo_id, mil_id, asset(1), fee_50, geo_private_key ), insufficient_fee );
+      GRAPHENE_REQUIRE_THROW( transfer_test( bot_id, mil_id, asset(1), fee_50, bot_private_key ), insufficient_fee );
+      GRAPHENE_REQUIRE_THROW( transfer_test( you_id, mil_id, asset(1), fee_50, you_private_key ), insufficient_fee );
+      CoinSecondsAudit();
+
+      // normal transfer is ok
+      BOOST_TEST_MESSAGE( "testing full fee" );
+      transfer_test( you_id, mil_id, asset(1), fee_100, you_private_key );
+      a_you.bal -= ( 1 + transfer_fee );
+      a_mil.bal += 1;
+      CoinSecondsAudit();
+      BOOST_TEST_MESSAGE( "round " << (i) << " end" );
+   }
+
+   // the first block after hard fork time
+   BOOST_TEST_MESSAGE( "Generate a block after hard fork 603 time" );
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+
+      // check
+      BOOST_CHECK_EQUAL(a_mil.bal * 1 * block_interval, a_mil.cs.to_uint64());
+      BOOST_CHECK_EQUAL(a_geo.bal * 1 * block_interval, a_geo.cs.to_uint64());
+      BOOST_CHECK_EQUAL(a_bot.bal * 1 * block_interval, a_bot.cs.to_uint64());
+      BOOST_CHECK_EQUAL(a_you.bal * 1 * block_interval, a_you.cs.to_uint64());
+      BOOST_CHECK_EQUAL(a_umi.bal * 1 * block_interval, a_umi.cs.to_uint64());
+      BOOST_CHECK_EQUAL(a_car.bal * 1 * block_interval, a_car.cs.to_uint64());
+
+      // enable fees
+      ENABLE_FEES_FOR_COIN_SECONDS_TEST;
+
+      if( a_geo.ecsfee < transfer_fee )
+      {
+         GRAPHENE_REQUIRE_THROW( transfer_test( geo_id, mil_id, asset(1), fee_0, geo_private_key ), insufficient_fee );
+      }
+
+      CoinSecondsAudit();
+   }
+
+   // assume that initial funds are same,
+   // geo, the lifetime member, should be the first one who can pay 50% of fee by cs
+   // generate blocks until cs of geo reach the limit
+   BOOST_TEST_MESSAGE( "Preparing first half fee test" );
+   while( a_geo.ecsfee < transfer_fee / 2 )
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+   }
+   BOOST_TEST_MESSAGE( "Block #" << db.head_block_num() );
+   // geo transfer some assets to umi, pay 50% of fee by cs
+   // at same time, most likely bot and you don't have enough coin-seconds to pay 50% of fee
+   BOOST_TEST_MESSAGE( "First half fee test" );
+   {
+      ENABLE_FEES_FOR_COIN_SECONDS_TEST;
+
+      transfer_test( geo_id, umi_id, asset(1), fee_50, geo_private_key );
+      a_geo.bal -= (1 + transfer_fee / 2);
+      a_umi.bal += 1;
+
+      fc::uint128_t cs_change ( transfer_fee - transfer_fee / 2 );
+      cs_change *= cs_fee_rate_lifetime_member;
+      a_geo.cs = std::min(a_geo.cs, a_geo.ecs);
+      a_geo.cs -= cs_change;
+      UPDATE_ECS_AUDITOR( geo );
+
+      // assume umi's balance was 0, no need to update cs here.
+
+      CoinSecondsAudit();
+
+      if( a_bot.ecsfee < transfer_fee - transfer_fee / 2 )
+      {
+         GRAPHENE_REQUIRE_THROW( transfer_test( bot_id, mil_id, asset(1), fee_50, bot_private_key ), insufficient_fee );
+         GRAPHENE_REQUIRE_THROW( transfer_test( you_id, mil_id, asset(1), fee_50, you_private_key ), insufficient_fee );
+      }
+   }
+
+   // after some blocks, bot, the annual member, should be able to pay 100% of fee by cs
+   // in the meanwhile, umi started accumulating cs
+   BOOST_TEST_MESSAGE( "Preparing first 0 fee test" );
+   while( a_bot.ecsfee < transfer_fee )
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+   }
+   BOOST_TEST_MESSAGE( "Block #" << db.head_block_num() );
+   // bot transfer some assets to umi for free (pay all fees by cs)
+   // at same time, most likely you don't have enough coin-seconds to pay 100% of fee
+   BOOST_TEST_MESSAGE( "First 0 fee test" );
+   {
+      ENABLE_FEES_FOR_COIN_SECONDS_TEST;
+
+      transfer_test( bot_id, umi_id, asset(2), fee_0, bot_private_key );
+      a_bot.bal -= 2;
+      a_umi.bal += 2;
+
+      fc::uint128_t cs_change ( transfer_fee );
+      cs_change *= cs_fee_rate_annual_member;
+      a_bot.cs = std::min(a_bot.cs, a_bot.ecs);
+      a_bot.cs -= cs_change;
+      UPDATE_ECS_AUDITOR( bot );
+
+      CoinSecondsAudit();
+
+      if( a_you.ecsfee < transfer_fee )
+      {
+         GRAPHENE_REQUIRE_THROW( transfer_test( you_id, mil_id, asset(2), fee_0, you_private_key ), insufficient_fee );
+      }
+   }
+
+   // after some blocks, you, the basic member, should be able to pay 100% of fee by cs
+   BOOST_TEST_MESSAGE( "Preparing second 0 fee test" );
+   while( a_you.ecsfee < transfer_fee )
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+   }
+   BOOST_TEST_MESSAGE( "Block #" << db.head_block_num() );
+   // you transfer some assets to umi for free (pay all fees by cs)
+   BOOST_TEST_MESSAGE( "Second 0 fee test" );
+   {
+      ENABLE_FEES_FOR_COIN_SECONDS_TEST;
+
+      transfer_test( you_id, umi_id, asset(3), fee_0, you_private_key );
+      a_you.bal -= 3;
+      a_umi.bal += 3;
+
+      fc::uint128_t cs_change ( transfer_fee );
+      cs_change *= cs_fee_rate_basic_account;
+      a_you.cs = std::min(a_you.cs, a_you.ecs);
+      a_you.cs -= cs_change;
+      UPDATE_ECS_AUDITOR( you );
+
+      CoinSecondsAudit();
+   }
+
+   // all actors are accumulating cs, over the caps
+   BOOST_TEST_MESSAGE( "Preparing membership cap test 1" );
+   while( a_geo.cs < ccs_lifetime_member_x2
+         || a_bot.cs < ccs_annual_member_x2
+         || a_you.cs < ccs_basic_account_x2 )
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+   }
+   BOOST_TEST_MESSAGE( "Block #" << db.head_block_num() );
+   // but they can't use more than the cap
+   BOOST_TEST_MESSAGE( "Membership cap test 1" );
+   {
+      ENABLE_FEES_FOR_COIN_SECONDS_TEST;
+
+      // geo transfer to umi, after that, cs = cap - used
+      transfer_test( geo_id, umi_id, asset(5), fee_0, geo_private_key );
+      a_geo.bal -= 5;
+      a_umi.bal += 5;
+
+      fc::uint128_t cs_change ( transfer_fee );
+      cs_change *= cs_fee_rate_lifetime_member;
+      a_geo.cs = ccs_lifetime_member;
+      a_geo.cs -= cs_change; // assume that cap >= tranfer_fee
+      UPDATE_ECS_AUDITOR( geo );
+
+      // bot transfer to umi, after that, cs = cap - used
+      transfer_test( bot_id, umi_id, asset(7), fee_0, bot_private_key );
+      a_bot.bal -= 7;
+      a_umi.bal += 7;
+
+      cs_change = transfer_fee;
+      cs_change *= cs_fee_rate_annual_member;
+      a_bot.cs = ccs_annual_member;
+      a_bot.cs -= cs_change; // assume that cap >= tranfer_fee
+      UPDATE_ECS_AUDITOR( bot );
+
+      // you transfer to umi, after that, cs = cap - used
+      transfer_test( you_id, umi_id, asset(11), fee_0, you_private_key );
+      a_you.bal -= 11;
+      a_umi.bal += 11;
+
+      cs_change = transfer_fee;
+      cs_change *= cs_fee_rate_basic_account;
+      a_you.cs = ccs_basic_account;
+      a_you.cs -= cs_change; // assume that cap >= tranfer_fee
+      UPDATE_ECS_AUDITOR( you );
+
+      CoinSecondsAudit();
+   }
+
+   // all actors are accumulating cs, over the caps
+   BOOST_TEST_MESSAGE( "Preparing membership cap test 2" );
+   while( a_geo.cs < ccs_lifetime_member_x2
+         || a_bot.cs < ccs_annual_member_x2
+         || a_you.cs < ccs_basic_account_x2 )
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+   }
+   // at a time point, the cap of coin_seconds_as_fee of basic member is set to 3/4 of total transfer fee by the committee
+   {
+      max_cs_fee_basic_account = transfer_fee * 3 / 4;
+      UPDATE_GLOBAL_CS_FEE_OPTIONS;
+      a_mil.ccs = ccs_basic_account;
+      a_you.ccs = ccs_basic_account;
+      a_umi.ccs = ccs_basic_account;
+      a_car.ccs = ccs_basic_account;
+      UPDATE_ECS_AUDITOR( mil );
+      UPDATE_ECS_AUDITOR( you );
+      UPDATE_ECS_AUDITOR( umi );
+      UPDATE_ECS_AUDITOR( car );
+   }
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+   }
+   BOOST_TEST_MESSAGE( "Block #" << db.head_block_num() );
+   // then basic members can't transfer for free, but other members can
+   BOOST_TEST_MESSAGE( "Membership cap test 2" );
+   {
+      ENABLE_FEES_FOR_COIN_SECONDS_TEST;
+
+      GRAPHENE_REQUIRE_THROW( transfer_test( you_id, mil_id, asset(1), fee_0, you_private_key ), insufficient_fee );
+
+      transfer_test( geo_id, mil_id, asset(1), fee_0, geo_private_key );
+      a_geo.bal -= 1;
+      a_mil.bal += 1;
+
+      fc::uint128_t cs_change ( transfer_fee );
+      cs_change *= cs_fee_rate_lifetime_member;
+      a_geo.cs = std::min(a_geo.cs, a_geo.ecs);
+      a_geo.cs -= cs_change;
+      UPDATE_ECS_AUDITOR( geo );
+
+      transfer_test( bot_id, mil_id, asset(1), fee_0, bot_private_key );
+      a_bot.bal -= 1;
+      a_mil.bal += 1;
+
+      cs_change = transfer_fee;
+      cs_change *= cs_fee_rate_annual_member;
+      a_bot.cs = std::min(a_bot.cs, a_bot.ecs);
+      a_bot.cs -= cs_change;
+      UPDATE_ECS_AUDITOR( bot );
+   }
+   // basic members can still transfer at 50% off
+   BOOST_TEST_MESSAGE( "Membership cap test 2+" );
+   {
+      transfer_test( you_id, umi_id, asset(1), fee_50, you_private_key );
+      a_you.bal -= (1 + transfer_fee / 2);
+      a_umi.bal += 1;
+
+      fc::uint128_t cs_change ( transfer_fee - transfer_fee / 2 );
+      cs_change *= cs_fee_rate_basic_account;
+      a_you.cs = std::min(a_you.cs, a_you.ecs);
+      a_you.cs -= cs_change;
+      UPDATE_ECS_AUDITOR( you );
+
+   }
+
+   // all actors are accumulating cs, over the caps
+   BOOST_TEST_MESSAGE( "Preparing operation cap test" );
+   while( a_geo.cs < ccs_lifetime_member_x2
+         || a_bot.cs < ccs_annual_member_x2
+         || a_you.cs < ccs_basic_account_x2 )
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+   }
+   BOOST_TEST_MESSAGE( "Block #" << db.head_block_num() );
+   // at a time point, the cap of coin_seconds_as_fee of transfer is set to 1/4 of total fee by the committee
+   {
+      max_cs_as_transfer_fee = transfer_fee / 4;
+      UPDATE_GLOBAL_CS_FEE_OPTIONS;
+   }
+   {
+      generate_block( skip );
+      UPDATE_CS_AUDITORS( 1 * block_interval );
+      CoinSecondsAudit();
+   }
+   // all actors can no longer transfer for free
+   BOOST_TEST_MESSAGE( "Operation cap test" );
+   {
+      ENABLE_FEES_FOR_COIN_SECONDS_TEST;
+      GRAPHENE_REQUIRE_THROW( transfer_test( geo_id, mil_id, asset(1), fee_0, geo_private_key ), insufficient_fee );
+      GRAPHENE_REQUIRE_THROW( transfer_test( bot_id, mil_id, asset(1), fee_0, bot_private_key ), insufficient_fee );
+      GRAPHENE_REQUIRE_THROW( transfer_test( you_id, mil_id, asset(1), fee_0, you_private_key ), insufficient_fee );
+   }
+   // nor at 50% off
+   {
+      GRAPHENE_REQUIRE_THROW( transfer_test( geo_id, mil_id, asset(1), fee_50, geo_private_key ), insufficient_fee );
+      GRAPHENE_REQUIRE_THROW( transfer_test( bot_id, mil_id, asset(1), fee_50, bot_private_key ), insufficient_fee );
+      GRAPHENE_REQUIRE_THROW( transfer_test( you_id, mil_id, asset(1), fee_50, you_private_key ), insufficient_fee );
+   }
+   BOOST_TEST_MESSAGE( "The end" );
+
+   //idump( ( get_operation_history( mil_id ) ) );
+   //idump( ( get_operation_history( geo_id ) ) );
+   //idump( ( get_operation_history( bot_id ) ) );
+   //idump( ( get_operation_history( you_id ) ) );
+   //idump( ( get_operation_history( umi_id ) ) );
+   //idump( ( get_operation_history( car_id ) ) );
+
+} FC_LOG_AND_RETHROW() }
+
+
 BOOST_AUTO_TEST_SUITE_END()

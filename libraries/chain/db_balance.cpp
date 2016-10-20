@@ -68,12 +68,36 @@ void database::adjust_balance(account_id_type account, asset delta )
          b.asset_type = delta.asset_id;
          b.balance = delta.amount.value;
       });
+      // Update coin_seconds_earned and etc
+      if( head_block_time() > HARDFORK_603_TIME )
+      {
+         // TODO how to deal with smart coins?
+         if( delta.asset_id == asset_id_type() )
+         {
+            modify( account(*this).statistics(*this), [&](account_statistics_object& s) {
+               s.set_coin_seconds_earned( 0, head_block_time() );
+            });
+         }
+      }
    } else {
       if( delta.amount < 0 )
          FC_ASSERT( itr->get_balance() >= -delta, "Insufficient Balance: ${a}'s balance of ${b} is less than required ${r}", ("a",account(*this).name)("b",to_pretty_string(itr->get_balance()))("r",to_pretty_string(-delta)));
+      const asset original_balance = itr->get_balance();
       modify(*itr, [delta](account_balance_object& b) {
          b.adjust_balance(delta);
       });
+      // Update coin_seconds_earned and etc
+      if( head_block_time() > HARDFORK_603_TIME )
+      {
+         // TODO how to deal with smart coins?
+         if( delta.asset_id == asset_id_type() )
+         {
+            modify( account(*this).statistics(*this), [&](account_statistics_object& s) {
+               //TODO will coin_seconds_earned expire? seems hard to calculate
+               s.update_coin_seconds_earned( original_balance, head_block_time() );
+            });
+         }
+      }
    }
 
 } FC_CAPTURE_AND_RETHROW( (account)(delta) ) }
