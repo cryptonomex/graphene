@@ -79,6 +79,35 @@ database& generic_evaluator::db()const { return trx_state->db(); }
       }
    }
 
+   void generic_evaluator::prepare_fee_from_coin_seconds(const operation& o)
+   {
+      const auto& fee_options = db().get_global_properties().parameters.get_coin_seconds_as_fees_options();
+      const auto& max_op_fee = fee_options.max_fee_from_coin_seconds_by_operation;
+      if( max_op_fee.size() > o.which() && max_op_fee[o.which()] > 0 ) // if fee can be paid with coin seconds
+      {
+         const asset& core_balance = db().get_balance( fee_paying_account->get_id(), asset_id_type() );
+         const auto payer_membership = fee_paying_account->get_membership( db().head_block_time() );
+         coin_seconds_earned = fee_paying_account_statistics->compute_coin_seconds_earned(
+                                       core_balance, db().head_block_time() );
+         if( coin_seconds_earned > 0 ) // if payer have some coin seconds to pay
+         {
+            coin_seconds_as_fees_rate = fee_options.coin_seconds_as_fees_rate[payer_membership];
+            fc::uint128_t coin_seconds_to_fees = coin_seconds_earned;
+            coin_seconds_to_fees /= coin_seconds_as_fees_rate.value;
+            fees_accumulated_from_coin_seconds = coin_seconds_to_fees.to_uint64();
+
+            share_type max_fees_allowed = fee_options.max_accumulated_fees_from_coin_seconds[payer_membership];
+            if( fees_accumulated_from_coin_seconds > max_fees_allowed ) // if accumulated too many coin seconds, truncate
+            {
+               fees_accumulated_from_coin_seconds = max_fees_allowed;
+               coin_seconds_earned = fc::uint128_t( max_fees_allowed.value );
+               coin_seconds_earned *= coin_seconds_as_fees_rate.value;
+            }
+            max_fees_payable_with_coin_seconds = std::min( fees_accumulated_from_coin_seconds, max_op_fee[o.which()] );
+         }
+      }
+   }
+
    void generic_evaluator::convert_fee()
    {
       if( !trx_state->skip_fee ) {
@@ -90,6 +119,11 @@ database& generic_evaluator::db()const { return trx_state->db(); }
             });
          }
       }
+   }
+
+   void generic_evaluator::pay_fee( const operation& op )
+   {
+      pay_fee();
    }
 
    void generic_evaluator::pay_fee()
@@ -121,11 +155,29 @@ database& generic_evaluator::db()const { return trx_state->db(); }
 
    share_type generic_evaluator::calculate_fee_for_operation(const operation& op) const
    {
-     return db().current_fee_schedule().calculate_fee( op ).amount;
+      variant v;
+      db().build_extended_fee_parameters( op, v );
+      return db().current_fee_schedule().calculate_fee_extended( op, v ).amount;
    }
+
    void generic_evaluator::db_adjust_balance(const account_id_type& fee_payer, asset fee_from_account)
    {
      db().adjust_balance(fee_payer, fee_from_account);
    }
 
+   void generic_evaluator::pay_fee_with_coin_seconds()
+   { try {
+      if( !trx_state->skip_fee ) {
+         database& d = db();
+         // deduct fees from coin_seconds_earned
+         if( fees_paid_with_coin_seconds > 0 )
+         {
+            fc::uint128_t coin_seconds_consumed( fees_paid_with_coin_seconds.value );
+            coin_seconds_consumed *= coin_seconds_as_fees_rate.value;
+            d.modify(*fee_paying_account_statistics, [&](account_statistics_object& o) {
+               o.set_coin_seconds_earned( coin_seconds_earned - coin_seconds_consumed, d.head_block_time() );
+            });
+         }
+      }
+   } FC_CAPTURE_AND_RETHROW() }
 } }

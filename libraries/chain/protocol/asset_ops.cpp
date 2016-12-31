@@ -114,10 +114,16 @@ void asset_update_operation::validate()const
    FC_ASSERT( fee.amount >= 0 );
    if( new_issuer )
       FC_ASSERT(issuer != *new_issuer);
-   new_options.validate();
+   // firstly check new_options except CER
+   new_options.validate_except_cer();
 
-   asset dummy = asset(1, asset_to_update) * new_options.core_exchange_rate;
-   FC_ASSERT(dummy.asset_id == asset_id_type());
+   // if CER is not null, check it
+   if( !new_options.core_exchange_rate.is_null() )
+   {
+      new_options.core_exchange_rate.validate();
+      asset dummy = asset(1, asset_to_update) * new_options.core_exchange_rate;
+      FC_ASSERT(dummy.asset_id == asset_id_type());
+   }
 }
 
 share_type asset_update_operation::calculate_fee(const asset_update_operation::fee_parameters_type& k)const
@@ -200,6 +206,14 @@ void bitasset_options::validate() const
 
 void asset_options::validate()const
 {
+   core_exchange_rate.validate();
+   FC_ASSERT( core_exchange_rate.base.asset_id.instance.value == 0 ||
+              core_exchange_rate.quote.asset_id.instance.value == 0 );
+   validate_except_cer();
+}
+
+void asset_options::validate_except_cer()const
+{
    FC_ASSERT( max_supply > 0 );
    FC_ASSERT( max_supply <= GRAPHENE_MAX_SHARE_SUPPLY );
    FC_ASSERT( market_fee_percent <= GRAPHENE_100_PERCENT );
@@ -210,9 +224,6 @@ void asset_options::validate()const
    FC_ASSERT( !(flags & global_settle) );
    // the witness_fed and committee_fed flags cannot be set simultaneously
    FC_ASSERT( (flags & (witness_fed_asset | committee_fed_asset)) != (witness_fed_asset | committee_fed_asset) );
-   core_exchange_rate.validate();
-   FC_ASSERT( core_exchange_rate.base.asset_id.instance.value == 0 ||
-              core_exchange_rate.quote.asset_id.instance.value == 0 );
 
    if(!whitelist_authorities.empty() || !blacklist_authorities.empty())
       FC_ASSERT( flags & white_list );

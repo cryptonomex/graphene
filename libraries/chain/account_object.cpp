@@ -29,6 +29,7 @@
 
 namespace graphene { namespace chain {
 
+/// @return a * p% / 100%
 share_type cut_fee(share_type a, uint16_t p)
 {
    if( a == 0 || p == 0 )
@@ -42,6 +43,20 @@ share_type cut_fee(share_type a, uint16_t p)
    return r.to_uint64();
 }
 
+/// @return a * p% / t%
+share_type cut_fee(share_type a, uint16_t p, uint16_t t)
+{
+   if( a == 0 || p == 0 )
+      return 0;
+   if( p >= t )
+      return a;
+
+   fc::uint128 r(a.value);
+   r *= p;
+   r /= t;
+   return r.to_uint64();
+}
+
 void account_balance_object::adjust_balance(const asset& delta)
 {
    assert(delta.asset_id == asset_type);
@@ -50,8 +65,11 @@ void account_balance_object::adjust_balance(const asset& delta)
 
 void account_statistics_object::process_fees(const account_object& a, database& d) const
 {
-   if( pending_fees > 0 || pending_vested_fees > 0 )
+   if( pending_fees > 0 || pending_vested_fees > 0
+         || pending_fees_to_network > 0 || pending_fees_to_non_network > 0
+         || pending_vested_fees_to_non_network > 0)
    {
+      // split pending fees among network, lifetime referrer, registrar, referrer
       auto pay_out_fees = [&](const account_object& account, share_type core_fee_total, bool require_vesting)
       {
          // Check the referrer -- if he's no longer a member, pay to the lifetime referrer instead.
@@ -94,10 +112,65 @@ void account_statistics_object::process_fees(const account_object& a, database& 
       pay_out_fees(a, pending_fees, true);
       pay_out_fees(a, pending_vested_fees, false);
 
+
+      // pay pending network fees to network
+      auto pay_out_network_fees = [&]( share_type network_fee_total )
+      {
+
+#ifndef NDEBUG
+         const auto& props = d.get_global_properties();
+
+         share_type reserved = cut_fee(network_fee_total, props.parameters.reserve_percent_of_fee);
+         share_type accumulated = network_fee_total - reserved;
+         assert( accumulated + reserved == network_fee_total );
+#endif
+         d.modify(asset_dynamic_data_id_type()(d), [network_fee_total](asset_dynamic_data_object& d) {
+            d.accumulated_fees += network_fee_total;
+         });
+      };
+
+      pay_out_network_fees(pending_fees_to_network);
+
+
+      // split pending non-network fees among lifetime referrer, registrar, referrer
+      auto pay_out_non_network_fees = [&](const account_object& account, share_type core_fee_total, bool require_vesting)
+      {
+         // Check the referrer -- if he's no longer a member, pay to the lifetime referrer instead.
+         // No need to check the registrar; registrars are required to be lifetime members.
+         if( account.referrer(d).is_basic_account(d.head_block_time()) )
+            d.modify(account, [](account_object& a) {
+               a.referrer = a.lifetime_referrer;
+            });
+
+         share_type lifetime_cut = cut_fee(core_fee_total,
+                                           account.lifetime_referrer_fee_percentage,
+                                           GRAPHENE_100_PERCENT - account.network_fee_percentage);
+         share_type referral = core_fee_total - lifetime_cut;
+
+         // Potential optimization: Skip some of this math and object lookups by special casing on the account type.
+         // For example, if the account is a lifetime member, we can skip all this and just deposit the referral to
+         // it directly.
+         share_type referrer_cut = cut_fee(referral, account.referrer_rewards_percentage);
+         share_type registrar_cut = referral - referrer_cut;
+
+         d.deposit_cashback(d.get(account.lifetime_referrer), lifetime_cut, require_vesting);
+         d.deposit_cashback(d.get(account.referrer), referrer_cut, require_vesting);
+         d.deposit_cashback(d.get(account.registrar), registrar_cut, require_vesting);
+
+         assert( referrer_cut + registrar_cut + lifetime_cut == core_fee_total );
+      };
+
+      pay_out_non_network_fees(a, pending_fees_to_non_network, true);
+      pay_out_non_network_fees(a, pending_vested_fees_to_non_network, false);
+
       d.modify(*this, [&](account_statistics_object& s) {
-         s.lifetime_fees_paid += pending_fees + pending_vested_fees;
+         s.lifetime_fees_paid += ( pending_fees + pending_vested_fees + pending_fees_to_network
+                                 + pending_fees_to_non_network + pending_vested_fees_to_non_network );
          s.pending_fees = 0;
          s.pending_vested_fees = 0;
+         s.pending_fees_to_network = 0;
+         s.pending_fees_to_non_network = 0;
+         s.pending_vested_fees_to_non_network = 0;
       });
    }
 }
@@ -108,6 +181,46 @@ void account_statistics_object::pay_fee( share_type core_fee, share_type cashbac
       pending_fees += core_fee;
    else
       pending_vested_fees += core_fee;
+}
+
+void account_statistics_object::pay_fee_pre_split_network( share_type core_fee,
+                                                           share_type cashback_vesting_threshold,
+                                                           share_type network_fee )
+{
+   if( core_fee <= 0 ) return;
+   share_type new_network_fee = network_fee;
+   if( core_fee < network_fee ) new_network_fee = core_fee;
+   pending_fees_to_network += new_network_fee;
+   if( core_fee > cashback_vesting_threshold )
+      pending_fees_to_non_network += ( core_fee - new_network_fee );
+   else
+      pending_vested_fees_to_non_network += ( core_fee - new_network_fee );
+}
+
+fc::uint128_t account_statistics_object::compute_coin_seconds_earned(const asset& balance, fc::time_point_sec now)const
+{
+   if( now <= coin_seconds_earned_last_update )
+      return coin_seconds_earned;
+   int64_t delta_seconds = (now - coin_seconds_earned_last_update).to_seconds();
+
+   fc::uint128_t delta_coin_seconds = balance.amount.value;
+   delta_coin_seconds *= delta_seconds;
+
+   return (coin_seconds_earned + delta_coin_seconds);
+}
+
+void account_statistics_object::update_coin_seconds_earned(const asset& balance, fc::time_point_sec now)
+{
+   if( now <= coin_seconds_earned_last_update )
+      return;
+   coin_seconds_earned = compute_coin_seconds_earned(balance, now);
+   coin_seconds_earned_last_update = now;
+}
+
+void account_statistics_object::set_coin_seconds_earned(const fc::uint128_t new_coin_seconds, fc::time_point_sec now)
+{
+   coin_seconds_earned = new_coin_seconds;
+   coin_seconds_earned_last_update = now;
 }
 
 set<account_id_type> account_member_index::get_account_members(const account_object& a)const

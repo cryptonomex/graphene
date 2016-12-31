@@ -75,11 +75,43 @@ namespace graphene { namespace chain {
        * size of description.
        */
       string description;
+
+      /**
+       * struct for override extensions
+       */
+      struct ext
+      {
+         /** container of transfer fee mode */
+         struct transfer_fee_mode_options
+         {
+             /**
+              * transfer fee mode, would be:
+              * * flat fee mode
+              * * simple CER based percentage fee mode
+              */
+             asset_transfer_fee_mode transfer_fee_mode = GRAPHENE_DEFAULT_TRANSFER_FEE_MODE;
+         };
+      };
+
+      /**
+       * override future_extensions here
+       */
+      typedef static_variant<void_t, ext::transfer_fee_mode_options> future_extensions;
+
+      /**
+       * override extensions_type here
+       */
+      typedef flat_set<future_extensions> extensions_type;
+
       extensions_type extensions;
 
       /// Perform internal consistency checks.
       /// @throws fc::exception if any check fails
       void validate()const;
+
+      /// Perform internal consistency checks, but don't check core_exchange_rate.
+      /// @throws fc::exception if any check fails
+      void validate_except_cer()const;
    };
 
    /**
@@ -265,8 +297,10 @@ namespace graphene { namespace chain {
     *
     * @pre @ref issuer SHALL be an existing account and MUST match asset_object::issuer on @ref asset_to_update
     * @pre @ref fee SHALL be nonnegative, and @ref issuer MUST have a sufficient balance to pay it
-    * @pre @ref new_options SHALL be internally consistent, as verified by @ref validate()
-    * @post @ref asset_to_update will have options matching those of new_options
+    * @pre @ref new_options SHALL be internally consistent except that core_exchange_rate can be null,
+    *      as verified by @ref validate_except_cer()
+    * @post @ref asset_to_update will have options matching those of new_options, except that core_exchange_rate
+    *       won't be updated if core_exchange_rate in new_options is null
     */
    struct asset_update_operation : public base_operation
    {
@@ -448,6 +482,9 @@ namespace graphene { namespace chain {
 FC_REFLECT( graphene::chain::asset_claim_fees_operation, (fee)(issuer)(amount_to_claim)(extensions) )
 FC_REFLECT( graphene::chain::asset_claim_fees_operation::fee_parameters_type, (fee) )
 
+FC_REFLECT( graphene::chain::asset_options::ext::transfer_fee_mode_options, (transfer_fee_mode) )
+FC_REFLECT_TYPENAME( graphene::chain::asset_options::future_extensions )
+FC_REFLECT_TYPENAME( graphene::chain::asset_options::extensions_type )
 FC_REFLECT( graphene::chain::asset_options,
             (max_supply)
             (market_fee_percent)

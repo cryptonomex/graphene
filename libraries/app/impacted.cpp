@@ -42,6 +42,11 @@ struct get_impacted_account_visitor
       _impacted.insert( op.to );
    }
 
+   void operator()( const transfer_v2_operation& op )
+   {
+      _impacted.insert( op.to );
+   }
+
    void operator()( const asset_claim_fees_operation& op ){}
    void operator()( const limit_order_create_operation& op ) {}
    void operator()( const limit_order_cancel_operation& op )
@@ -152,6 +157,7 @@ struct get_impacted_account_visitor
       _impacted.insert( op.committee_member_account );
    }
    void operator()( const committee_member_update_global_parameters_operation& op ) {}
+   void operator()( const committee_member_update_core_asset_operation& op ) {}
 
    void operator()( const vesting_balance_create_operation& op )
    {

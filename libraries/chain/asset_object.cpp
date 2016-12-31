@@ -158,3 +158,40 @@ string asset_object::amount_to_string(share_type amount) const
       result += "." + fc::to_string(scaled_precision.value + decimals).erase(0,1);
    return result;
 }
+
+asset_transfer_fee_mode asset_object::get_transfer_fee_mode() const
+{
+   // if asset's CER is not set, return default mode
+   if( id != asset_id_type(0) && options.core_exchange_rate.is_null() )
+      return GRAPHENE_DEFAULT_TRANSFER_FEE_MODE;
+   // find the mode
+   if( options.extensions.size() > 0 )
+   {
+      for( const asset_options::future_extensions& e : options.extensions )
+      {
+         if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_mode_options>::value )
+            return e.get<asset_options::ext::transfer_fee_mode_options>().transfer_fee_mode;
+      }
+   }
+   return GRAPHENE_DEFAULT_TRANSFER_FEE_MODE;
+}
+
+void asset_object::set_transfer_fee_mode(const asset_transfer_fee_mode new_mode)
+{
+   // firstly look for fee mode in options, if found, change it
+   for( asset_options::future_extensions& e : options.extensions )
+   {
+      if( e.which() == asset_options::future_extensions::tag<asset_options::ext::transfer_fee_mode_options>::value )
+      {
+         e.get<asset_options::ext::transfer_fee_mode_options>().transfer_fee_mode = new_mode;
+         return;
+      }
+   }
+   // if not found, add it
+   if( new_mode == GRAPHENE_DEFAULT_TRANSFER_FEE_MODE )
+      return;
+   struct asset_options::ext::transfer_fee_mode_options new_options;
+   new_options.transfer_fee_mode = new_mode;
+   asset_options::future_extensions e = new_options;
+   options.extensions.emplace_hint( options.extensions.end(), e );
+}

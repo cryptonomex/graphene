@@ -125,6 +125,11 @@ namespace graphene { namespace chain {
          asset_options options;
 
 
+         /// @return transfer fee mode of this asset, or @ref GRAPHENE_DEFAULT_TRANSFER_FEE_MODE if not set
+         asset_transfer_fee_mode get_transfer_fee_mode()const;
+         /// Set transfer fee mode of this asset
+         void set_transfer_fee_mode(const asset_transfer_fee_mode new_mode);
+
          /// Current supply, fee pool, and collected fees are stored in a separate object as they change frequently.
          asset_dynamic_data_id_type  dynamic_asset_data_id;
          /// Extra data associated with BitAssets. This field is non-null if and only if is_market_issued() returns true

@@ -25,6 +25,7 @@
 #include <graphene/chain/exceptions.hpp>
 #include <graphene/chain/transaction_evaluation_state.hpp>
 #include <graphene/chain/protocol/operations.hpp>
+#include <graphene/chain/hardfork.hpp>
 
 namespace graphene { namespace chain {
 
@@ -63,6 +64,8 @@ namespace graphene { namespace chain {
        * The default implementation simply calls account_statistics_object->pay_fee() to
        * increment pending_fees or pending_vested_fees.
        */
+      virtual void pay_fee(const operation& op);
+      /** Keep the function with no parameter here for backward compatibility */
       virtual void pay_fee();
 
       database& db()const;
@@ -95,6 +98,16 @@ namespace graphene { namespace chain {
        */
       void convert_fee();
 
+      /**
+       * Compute how much can be paid with coin-seconds, need to call after prepare_fee().
+       */
+      void prepare_fee_from_coin_seconds(const operation& o);
+
+      /**
+       * Pay fee with coin-seconds
+       */
+      void pay_fee_with_coin_seconds();
+
       object_id_type get_relative_id( object_id_type rel_id )const;
 
       /**
@@ -115,6 +128,13 @@ namespace graphene { namespace chain {
       const asset_object*              fee_asset          = nullptr;
       const asset_dynamic_data_object* fee_asset_dyn_data = nullptr;
       transaction_evaluation_state*    trx_state;
+      // fields for computing fees paid with coin seconds
+      share_type                       max_fees_payable_with_coin_seconds = 0;
+      share_type                       fees_accumulated_from_coin_seconds = 0;
+      share_type                       fees_paid_with_coin_seconds        = 0;
+      share_type                       coin_seconds_as_fees_rate          = 0;
+      fc::uint128_t                    coin_seconds_earned                = 0;
+
    };
 
    class op_evaluator
@@ -147,13 +167,21 @@ namespace graphene { namespace chain {
          const auto& op = o.get<typename DerivedEvaluator::operation_type>();
 
          prepare_fee(op.fee_payer(), op.fee);
+
+         if( db().head_block_time() > HARDFORK_603_TIME )
+            prepare_fee_from_coin_seconds(o);
+
          if( !trx_state->skip_fee_schedule_check )
          {
             share_type required_fee = calculate_fee_for_operation(op);
-            GRAPHENE_ASSERT( core_fee_paid >= required_fee,
+            GRAPHENE_ASSERT( core_fee_paid + max_fees_payable_with_coin_seconds >= required_fee,
                        insufficient_fee,
                        "Insufficient Fee Paid",
+                       ("payable_from_coin_seconds", max_fees_payable_with_coin_seconds)
                        ("core_fee_paid",core_fee_paid)("required", required_fee) );
+            // if some fees are paid with coin seconds
+            if( core_fee_paid < required_fee )
+               fees_paid_with_coin_seconds = required_fee - core_fee_paid;
          }
 
          return eval->do_evaluate(op);
@@ -165,7 +193,8 @@ namespace graphene { namespace chain {
          const auto& op = o.get<typename DerivedEvaluator::operation_type>();
 
          convert_fee();
-         pay_fee();
+         pay_fee(o);
+         pay_fee_with_coin_seconds();
 
          auto result = eval->do_apply(op);
 

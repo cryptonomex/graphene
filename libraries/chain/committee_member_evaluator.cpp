@@ -28,6 +28,7 @@
 #include <graphene/chain/protocol/fee_schedule.hpp>
 #include <graphene/chain/protocol/vote.hpp>
 #include <graphene/chain/transaction_evaluation_state.hpp>
+#include <graphene/chain/hardfork.hpp>
 
 #include <fc/smart_ref_impl.hpp>
 
@@ -77,6 +78,18 @@ void_result committee_member_update_global_parameters_evaluator::do_evaluate(con
 { try {
    FC_ASSERT(trx_state->_is_proposed_trx);
 
+   database& d = db();
+
+   // #603 hard fork check
+   if( d.head_block_time() <= HARDFORK_603_TIME )
+   {
+      for( const auto& e : o.new_parameters.extensions )
+      {
+         FC_ASSERT( e.which() != chain_parameters::parameter_extension::tag<chain_parameters::ext::coin_seconds_as_fees_options>::value,
+                    "New parameters contain an extension which requires hardfork #603." );
+      }
+   }
+
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
 
@@ -84,6 +97,41 @@ void_result committee_member_update_global_parameters_evaluator::do_apply(const 
 { try {
    db().modify(db().get_global_properties(), [&o](global_property_object& p) {
       p.pending_parameters = o.new_parameters;
+   });
+
+   return void_result();
+} FC_CAPTURE_AND_RETHROW( (o) ) }
+
+void_result committee_member_update_core_asset_evaluator::do_evaluate(const committee_member_update_core_asset_operation& o)
+{ try {
+   FC_ASSERT(trx_state->_is_proposed_trx);
+
+   database& d = db();
+
+   // #583 BSIP10 hard fork check
+   if( d.head_block_time() <= HARDFORK_583_TIME )
+      FC_THROW( "Operation requires hardfork #583" );
+
+   return void_result();
+} FC_CAPTURE_AND_RETHROW( (o) ) }
+
+void_result committee_member_update_core_asset_evaluator::do_apply(const committee_member_update_core_asset_operation& o)
+{ try {
+   database& d = db();
+
+   const asset_object& a = d.get_core_asset();
+
+   auto a_copy = a;
+   a_copy.options = o.new_options;
+   auto new_mode = a_copy.get_transfer_fee_mode();
+
+   a_copy = a;
+   a_copy.options.market_fee_percent = o.new_options.market_fee_percent;
+   a_copy.options.max_market_fee = o.new_options.max_market_fee;
+   a_copy.set_transfer_fee_mode( new_mode );
+
+   d.modify(a, [&](asset_object& ao) {
+      ao.options = a_copy.options;
    });
 
    return void_result();

@@ -21,41 +21,38 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#pragma once
-#include <graphene/chain/protocol/operations.hpp>
-#include <graphene/chain/evaluator.hpp>
+
 #include <graphene/chain/database.hpp>
 
 namespace graphene { namespace chain {
 
-   class transfer_evaluator : public evaluator<transfer_evaluator>
+void database::build_extended_fee_parameters( const operation& op, variant& v )
+{
+   switch( op.which() )
    {
-      public:
-         typedef transfer_operation operation_type;
+      case operation::tag<transfer_operation>::value :
+      {
+         const transfer_operation& o = op.get<transfer_operation>();
+         const asset_object& a = get( o.amount.asset_id );
+         transfer_operation::extended_calculate_fee_parameters e;
+         e.transferring_asset_transfer_fee_mode = a.get_transfer_fee_mode();
+         to_variant( e, v );
+         break;
+      }
+      case operation::tag<transfer_v2_operation>::value :
+      {
+         const transfer_v2_operation& o = op.get<transfer_v2_operation>();
+         const asset_object& a = get( o.amount.asset_id );
+         transfer_v2_operation::extended_calculate_fee_parameters e;
+         e.scale = current_fee_schedule().scale;
+         e.transferring_asset_transfer_fee_mode = a.get_transfer_fee_mode();
+         e.transferring_asset_core_exchange_rate = a.options.core_exchange_rate;
+         to_variant( e, v );
+         break;
+      }
+      default:
+         break;
+   }
+}
 
-         void_result do_evaluate( const transfer_operation& o );
-         void_result do_apply( const transfer_operation& o );
-   };
-
-   class transfer_v2_evaluator : public evaluator<transfer_v2_evaluator>
-   {
-      public:
-         typedef transfer_v2_operation operation_type;
-
-         void_result do_evaluate( const transfer_v2_operation& o );
-         void_result do_apply( const transfer_v2_operation& o );
-
-      protected:
-         virtual void pay_fee( const operation& op ) override;
-   };
-
-   class override_transfer_evaluator : public evaluator<override_transfer_evaluator>
-   {
-      public:
-         typedef override_transfer_operation operation_type;
-
-         void_result do_evaluate( const override_transfer_operation& o );
-         void_result do_apply( const override_transfer_operation& o );
-   };
-
-} } // graphene::chain
+} }

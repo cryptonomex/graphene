@@ -61,6 +61,7 @@
 #include <fc/thread/scoped_lock.hpp>
 
 #include <graphene/app/api.hpp>
+#include <graphene/chain/hardfork.hpp>
 #include <graphene/chain/asset_object.hpp>
 #include <graphene/chain/protocol/fee_schedule.hpp>
 #include <graphene/utilities/git_revision.hpp>
@@ -118,6 +119,7 @@ public:
    std::string operator()(const T& op)const;
 
    std::string operator()(const transfer_operation& op)const;
+   std::string operator()(const transfer_v2_operation& op)const;
    std::string operator()(const transfer_from_blind_operation& op)const;
    std::string operator()(const transfer_to_blind_operation& op)const;
    std::string operator()(const account_create_operation& op)const;
@@ -492,10 +494,27 @@ public:
       return ob.template as<T>();
    }
 
+   struct set_fee_visitor
+   {
+      typedef void result_type;
+      asset _fee;
+
+      set_fee_visitor( asset f ):_fee(f){}
+
+      template<typename OpType>
+      void operator()( OpType& op )const
+      {
+         op.fee = _fee;
+      }
+   };
+
    void set_operation_fees( signed_transaction& tx, const fee_schedule& s  )
    {
       for( auto& op : tx.operations )
-         s.set_fee(op);
+      {
+         asset required_fee = _remote_db->get_operation_fee( op, asset_id_type(0) );
+         op.visit( set_fee_visitor( required_fee ) );
+      }
    }
 
    variant info() const
@@ -842,7 +861,11 @@ public:
       if( fee_asset_obj.get_id() != asset_id_type() )
       {
          for( auto& op : _builder_transactions[handle].operations )
-            total_fee += gprops.current_fees->set_fee( op, fee_asset_obj.options.core_exchange_rate );
+         {
+            asset required_fee = _remote_db->get_operation_fee( op, fee_asset_obj.id );
+            op.visit( set_fee_visitor( required_fee ) );
+            total_fee += required_fee;
+         }
 
          FC_ASSERT((total_fee * fee_asset_obj.options.core_exchange_rate).amount <=
                    get_object<asset_dynamic_data_object>(fee_asset_obj.dynamic_asset_data_id).fee_pool,
@@ -850,7 +873,11 @@ public:
                    ("asset", fee_asset_obj.symbol));
       } else {
          for( auto& op : _builder_transactions[handle].operations )
-            total_fee += gprops.current_fees->set_fee( op );
+         {
+            asset required_fee = _remote_db->get_operation_fee( op, asset_id_type(0) );
+            op.visit( set_fee_visitor( required_fee ) );
+            total_fee += required_fee;
+         }
       }
 
       return total_fee;
@@ -1993,10 +2020,10 @@ public:
          return sign_transaction(trx, broadcast);
    } FC_CAPTURE_AND_RETHROW((order_id)) }
 
-   signed_transaction transfer(string from, string to, string amount,
-                               string asset_symbol, string memo, bool broadcast = false)
-   { try {
-      FC_ASSERT( !self.is_locked() );
+   template<typename T>
+   signed_transaction build_transfer_trx( string from, string to, string amount,
+                                          string asset_symbol, string memo, bool broadcast = false )
+   {
       fc::optional<asset_object> asset_obj = get_asset(asset_symbol);
       FC_ASSERT(asset_obj, "Could not find asset matching ${asset}", ("asset", asset_symbol));
 
@@ -2005,20 +2032,19 @@ public:
       account_id_type from_id = from_account.id;
       account_id_type to_id = get_account_id(to);
 
-      transfer_operation xfer_op;
-
+      T xfer_op;
       xfer_op.from = from_id;
       xfer_op.to = to_id;
       xfer_op.amount = asset_obj->amount_from_string(amount);
 
       if( memo.size() )
-         {
-            xfer_op.memo = memo_data();
-            xfer_op.memo->from = from_account.options.memo_key;
-            xfer_op.memo->to = to_account.options.memo_key;
-            xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
-                                      to_account.options.memo_key, memo);
-         }
+      {
+         xfer_op.memo = memo_data();
+         xfer_op.memo->from = from_account.options.memo_key;
+         xfer_op.memo->to = to_account.options.memo_key;
+         xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
+                                   to_account.options.memo_key, memo);
+      }
 
       signed_transaction tx;
       tx.operations.push_back(xfer_op);
@@ -2026,6 +2052,23 @@ public:
       tx.validate();
 
       return sign_transaction(tx, broadcast);
+   }
+
+   signed_transaction transfer(string from, string to, string amount,
+                               string asset_symbol, string memo, bool broadcast = false)
+   { try {
+      FC_ASSERT( !self.is_locked() );
+      // check #583 BSIP10 hard fork time
+      if( time_point_sec(time_point::now()) <= HARDFORK_583_TIME )
+      {
+         return build_transfer_trx<transfer_operation>( from, to, amount,
+                                                        asset_symbol, memo, broadcast );
+      }
+      else
+      {
+         return build_transfer_trx<transfer_v2_operation>( from, to, amount,
+                                                           asset_symbol, memo, broadcast );
+      }
    } FC_CAPTURE_AND_RETHROW( (from)(to)(amount)(asset_symbol)(memo)(broadcast) ) }
 
    signed_transaction issue_asset(string to_account, string amount, string symbol,
@@ -2667,6 +2710,34 @@ string operation_printer::operator()(const transfer_operation& op) const
                memo = op.memo->get_message(*my_key, op.memo->to);
                out << " -- Memo: " << memo;
             }
+         } catch (const fc::exception& e) {
+            out << " -- could not decrypt memo";
+            elog("Error when decrypting memo: ${e}", ("e", e.to_detail_string()));
+         }
+      }
+   }
+   fee(op.fee);
+   return memo;
+}
+
+string operation_printer::operator()(const transfer_v2_operation& op) const
+{
+   out << "Transfer " << wallet.get_asset(op.amount.asset_id).amount_to_pretty_string(op.amount)
+       << " from " << wallet.get_account(op.from).name << " to " << wallet.get_account(op.to).name;
+   std::string memo;
+   if( op.memo )
+   {
+      if( wallet.is_locked() )
+      {
+         out << " -- Unlock wallet to see memo.";
+      } else {
+         try {
+            FC_ASSERT(wallet._keys.count(op.memo->to), "Memo is encrypted to a key ${k} not in this wallet.",
+                      ("k", op.memo->to));
+            auto my_key = wif_to_key(wallet._keys.at(op.memo->to));
+            FC_ASSERT(my_key, "Unable to recover private key to decrypt memo. Wallet may be corrupted.");
+            memo = op.memo->get_message(*my_key, op.memo->from);
+            out << " -- Memo: " << memo;
          } catch (const fc::exception& e) {
             out << " -- could not decrypt memo";
             elog("Error when decrypting memo: ${e}", ("e", e.to_detail_string()));

@@ -537,6 +537,13 @@ class database_api
        */
       vector< fc::variant > get_required_fees( const vector<operation>& ops, asset_id_type id )const;
 
+      /**
+       * Get minimum fee required by the given operation. Won't recursively check if the operation
+       * is a proposal.
+       * @return the fee
+       */
+      asset get_operation_fee( const operation& op, const asset_id_type id = asset_id_type(0) )const;
+
       ///////////////////////////
       // Proposed transactions //
       ///////////////////////////
@@ -651,6 +658,7 @@ FC_API(graphene::app::database_api,
    (verify_account_authority)
    (validate_transaction)
    (get_required_fees)
+   (get_operation_fee)
 
    // Proposed transactions
    (get_proposed_transactions)
