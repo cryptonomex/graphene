@@ -3,6 +3,13 @@ Intro for new developers
 
 This is a quick introduction to get new developers up to speed on Graphene.
 
+If you are currently running Ubuntu 14.04 LTS, there are some extra steps that you may require. As this requires Boost 1.57+, and Ubuntu cannot run C++14 (which Boost 1.58 requires), follow these steps to properly install Boost:
+    wget -c 'http://sourceforge.net/projects/boost/files/boost/1.57.0/boost_1_57_0.tar.bz2/download'
+    tar -xf download
+    cd boost_1_57_0/
+    ./bootstrap.sh --prefix=/usr/local/
+    ./b2 install
+    
 Starting Graphene
 -----------------
 
