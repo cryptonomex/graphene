@@ -11,6 +11,14 @@ For Ubuntu 14.04 LTS users, see this link first:
 
 and then proceed with:
 
+    sudo apt-get update
+    sudo apt-get install autoconf autotools-dev build-essential cmake g++ git libbz2-dev libdb++-dev libdb-dev libicu-dev libreadline-dev libssl-dev libtool openssl python-dev uuid-dev
+    git clone https://github.com/cryptonomex/secp256k1-zkp
+    cd secp256k1-zkp
+    ./autogen.sh
+    ./configure
+    make
+    cd ..
     git clone https://github.com/cryptonomex/graphene.git
     cd graphene
     git submodule update --init --recursive
