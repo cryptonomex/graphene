@@ -46,10 +46,12 @@
 #include <fc/rpc/api_connection.hpp>
 #include <fc/rpc/websocket_api.hpp>
 #include <fc/network/resolve.hpp>
+#include <fc/crypto/base64.hpp>
 
 #include <boost/filesystem/path.hpp>
 #include <boost/signals2.hpp>
 #include <boost/range/algorithm/reverse.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include <iostream>
 
@@ -185,12 +187,29 @@ namespace detail {
          _websocket_server = std::make_shared<fc::http::websocket_server>(enable_deflate_compression);
 
          _websocket_server->on_connection([&]( const fc::http::websocket_connection_ptr& c ){
+
             auto wsc = std::make_shared<fc::rpc::websocket_api_connection>(*c);
             auto login = std::make_shared<graphene::app::login_api>( std::ref(*_self) );
             auto db_api = std::make_shared<graphene::app::database_api>( std::ref(*_self->chain_database()) );
             wsc->register_api(fc::api<graphene::app::database_api>(db_api));
             wsc->register_api(fc::api<graphene::app::login_api>(login));
             c->set_session_data( wsc );
+
+             // Try to auto-login if "Authorization" header is present
+            std::string auth = c->get_request_header("Authorization");
+            if( boost::starts_with(auth, "Basic ") ) {
+
+               FC_ASSERT( auth.size() > 6 );
+               auto user_pass = fc::base64_decode(auth.substr(6));
+
+               std::vector<std::string> parts;
+               boost::split( parts, user_pass, boost::is_any_of(":") );
+
+               FC_ASSERT(parts.size() == 2);
+
+               login->login(parts[0], parts[1]);
+             }
+
          });
          ilog("Configured websocket rpc to listen on ${ip}", ("ip",_options->at("rpc-endpoint").as<string>()));
          _websocket_server->listen( fc::ip::endpoint::from_string(_options->at("rpc-endpoint").as<string>()) );
@@ -219,6 +238,22 @@ namespace detail {
             wsc->register_api(fc::api<graphene::app::database_api>(db_api));
             wsc->register_api(fc::api<graphene::app::login_api>(login));
             c->set_session_data( wsc );
+
+             // Try to auto-login if "Authorization" header is present
+            std::string auth = c->get_request_header("Authorization");
+            if( boost::starts_with(auth, "Basic ") ) {
+
+               FC_ASSERT( auth.size() > 6 );
+               auto user_pass = fc::base64_decode(auth.substr(6));
+
+               std::vector<std::string> parts;
+               boost::split( parts, user_pass, boost::is_any_of(":") );
+
+               FC_ASSERT(parts.size() == 2);
+
+               login->login(parts[0], parts[1]);
+             }
+
          });
          ilog("Configured websocket TLS rpc to listen on ${ip}", ("ip",_options->at("rpc-tls-endpoint").as<string>()));
          _websocket_tls_server->listen( fc::ip::endpoint::from_string(_options->at("rpc-tls-endpoint").as<string>()) );
