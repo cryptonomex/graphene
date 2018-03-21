@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Cryptonomex, Inc., and contributors.
+ * Copyright (c) 2017 Cryptonomex, Inc., and contributors.
  *
  * The MIT License
  *
@@ -33,8 +33,8 @@ using namespace std;
 
 namespace fc
 {
-   void to_variant(const account_multi_index_type& accts, variant& vo);
-   void from_variant(const variant &var, account_multi_index_type &vo);
+   void to_variant( const account_multi_index_type& accts, variant& vo, uint32_t max_depth );
+   void from_variant( const variant &var, account_multi_index_type &vo, uint32_t max_depth );
 }
 
 namespace graphene { namespace wallet {
@@ -256,10 +256,43 @@ namespace detail {
 class wallet_api_impl;
 }
 
+/***
+ * A utility class for performing various state-less actions that are related to wallets
+ */
+class utility {
+   public:
+      /**
+       * Derive any number of *possible* owner keys from a given brain key.
+       *
+       * NOTE: These keys may or may not match with the owner keys of any account.
+       * This function is merely intended to assist with account or key recovery.
+       *
+       * @see suggest_brain_key()
+       *
+       * @param brain_key    Brain key
+       * @param number_of_desired_keys  Number of desired keys
+       * @return A list of keys that are deterministically derived from the brainkey
+       */
+      static vector<brain_key_info> derive_owner_keys_from_brain_key(string brain_key, int number_of_desired_keys = 1);
+};
+
 struct operation_detail {
    string                   memo;
    string                   description;
    operation_history_object op;
+};
+
+struct operation_detail_ex {
+    string                   memo;
+    string                   description;
+    operation_history_object op;
+    transaction_id_type      transaction_id;
+};
+
+struct account_history_operation_detail {
+   uint32_t                     total_count = 0;
+   uint32_t                     result_count = 0;
+   vector<operation_detail_ex>  details;
 };
 
 /**
@@ -328,19 +361,35 @@ class wallet_api
        *
        * This returns a list of operation history objects, which describe activity on the account.
        *
-       * @note this API doesn't give a way to retrieve more than the most recent 100 transactions,
-       *       you can interface directly with the blockchain to get more history
        * @param name the name or id of the account
-       * @param limit the number of entries to return (starting from the most recent) (max 100)
+       * @param limit the number of entries to return (starting from the most recent)
        * @returns a list of \c operation_history_objects
        */
       vector<operation_detail>  get_account_history(string name, int limit)const;
 
+      /** Returns the relative operations on the named account from start number.
+       *
+       * @param name the name or id of the account
+       * @param stop Sequence number of earliest operation.
+       * @param limit the number of entries to return
+       * @param start  the sequence number where to start looping back throw the history
+       * @returns a list of \c operation_history_objects
+       */
+     vector<operation_detail>  get_relative_account_history(string name, uint32_t stop, int limit, uint32_t start)const;
 
-      vector<bucket_object>             get_market_history(string symbol, string symbol2, uint32_t bucket)const;
+      vector<bucket_object>             get_market_history(string symbol, string symbol2, uint32_t bucket, fc::time_point_sec start, fc::time_point_sec end)const;
       vector<limit_order_object>        get_limit_orders(string a, string b, uint32_t limit)const;
       vector<call_order_object>         get_call_orders(string a, uint32_t limit)const;
       vector<force_settlement_object>   get_settle_orders(string a, uint32_t limit)const;
+
+      /** Returns the collateral_bid object for the given MPA
+       *
+       * @param asset the name or id of the asset
+       * @param limit the number of entries to return
+       * @param start the sequence number where to start looping back throw the history
+       * @returns a list of \c collateral_bid_objects
+       */
+      vector<collateral_bid_object> get_collateral_bids(string asset, uint32_t limit = 100, uint32_t start = 0)const;
       
       /** Returns the block chain's slowly-changing settings.
        * This object contains all of the properties of the blockchain that are fixed
@@ -350,6 +399,17 @@ class wallet_api
        * @returns the global properties
        */
       global_property_object            get_global_properties() const;
+
+      /**
+       * Get operations relevant to the specified account filtering by operation type, with transaction id
+       *
+       * @param name the name or id of the account, whose history shoulde be queried
+       * @param operation_types The IDs of the operation we want to get operations in the account( 0 = transfer , 1 = limit order create, ...)
+       * @param start the sequence number where to start looping back throw the history
+       * @param limit the max number of entries to return (from start number)
+       * @returns account_history_operation_detail
+       */
+      account_history_operation_detail get_account_history_by_operations(string name, vector<uint16_t> operation_types, uint32_t start, int limit);
 
       /** Returns the block chain's rapidly-changing properties.
        * The returned object contains information that changes every block interval
@@ -447,6 +507,13 @@ class wallet_api
        * @ingroup Transaction Builder API
        */
       signed_transaction sign_builder_transaction(transaction_handle_type transaction_handle, bool broadcast = true);
+
+      /** Broadcast signed transaction
+       * @param tx signed transaction
+       * @returns the transaction ID along with the signed transaction.
+       */
+      pair<transaction_id_type,signed_transaction> broadcast_transaction(signed_transaction tx);
+
       /**
        * @ingroup Transaction Builder API
        */
@@ -576,9 +643,30 @@ class wallet_api
        */
       brain_key_info suggest_brain_key()const;
 
+     /**
+      * Derive any number of *possible* owner keys from a given brain key.
+      *
+      * NOTE: These keys may or may not match with the owner keys of any account.
+      * This function is merely intended to assist with account or key recovery.
+      *
+      * @see suggest_brain_key()
+      *
+      * @param brain_key    Brain key
+      * @param numberOfDesiredKeys  Number of desired keys
+      * @return A list of keys that are deterministically derived from the brainkey
+      */
+     vector<brain_key_info> derive_owner_keys_from_brain_key(string brain_key, int number_of_desired_keys = 1) const;
+
+     /**
+      * Determine whether a textual representation of a public key
+      * (in Base-58 format) is *currently* linked
+      * to any *registered* (i.e. non-stealth) account on the blockchain
+      * @param public_key Public key
+      * @return Whether a public key is known
+      */
+     bool is_public_key_registered(string public_key) const;
+
       /** Converts a signed_transaction in JSON form to its binary representation.
-       *
-       * TODO: I don't see a broadcast_transaction() function, do we need one?
        *
        * @param tx the transaction to serialize
        * @returns the binary form of the transaction.  It will not be hex encoded, 
@@ -727,6 +815,22 @@ class wallet_api
       transaction_id_type get_transaction_id( const signed_transaction& trx )const { return trx.id(); }
 
 
+      /** Sign a memo message.
+       *
+       * @param from the name or id of signing account; or a public key.
+       * @param to the name or id of receiving account; or a public key.
+       * @param memo text to sign.
+       */
+      memo_data sign_memo(string from, string to, string memo);
+
+      /** Read a memo.
+       *
+       * @param memo JSON-enconded memo.
+       * @returns string with decrypted message..
+       */
+      string read_memo(const memo_data& memo);
+
+
       /** These methods are used for stealth transfers */
       ///@{
       /**
@@ -849,51 +953,6 @@ class wallet_api
                                     uint32_t timeout_sec = 0,
                                     bool     fill_or_kill = false,
                                     bool     broadcast = false);
-                                    
-      /** Place a limit order attempting to sell one asset for another.
-       * 
-       * This API call abstracts away some of the details of the sell_asset call to be more
-       * user friendly. All orders placed with sell never timeout and will not be killed if they
-       * cannot be filled immediately. If you wish for one of these parameters to be different, 
-       * then sell_asset should be used instead.
-       *
-       * @param seller_account the account providing the asset being sold, and which will
-       *                       receive the processed of the sale.
-       * @param base The name or id of the asset to sell.
-       * @param quote The name or id of the asset to recieve.
-       * @param rate The rate in base:quote at which you want to sell.
-       * @param amount The amount of base you want to sell.
-       * @param broadcast true to broadcast the transaction on the network.
-       * @returns The signed transaction selling the funds.                 
-       */
-      signed_transaction sell( string seller_account,
-                               string base,
-                               string quote,
-                               double rate,
-                               double amount,
-                               bool broadcast );
-                               
-      /** Place a limit order attempting to buy one asset with another.
-       *
-       * This API call abstracts away some of the details of the sell_asset call to be more
-       * user friendly. All orders placed with buy never timeout and will not be killed if they
-       * cannot be filled immediately. If you wish for one of these parameters to be different,
-       * then sell_asset should be used instead.
-       *
-       * @param buyer_account The account buying the asset for another asset.
-       * @param base The name or id of the asset to buy.
-       * @param quote The name or id of the assest being offered as payment.
-       * @param rate The rate in base:quote at which you want to buy.
-       * @param amount the amount of base you want to buy.
-       * @param broadcast true to broadcast the transaction on the network.
-       * @param The signed transaction selling the funds.
-       */
-      signed_transaction buy( string buyer_account,
-                              string base,
-                              string quote,
-                              double rate,
-                              double amount,
-                              bool broadcast );
 
       /** Borrow an asset or update the debt/collateral ratio for the loan.
        *
@@ -1114,6 +1173,25 @@ class wallet_api
                                       string amount_to_settle,
                                       string symbol,
                                       bool broadcast = false);
+
+      /** Creates or updates a bid on an MPA after global settlement.
+       *
+       * In order to revive a market-pegged asset after global settlement (aka
+       * black swan), investors can bid collateral in order to take over part of
+       * the debt and the settlement fund, see BSIP-0018. Updating an existing
+       * bid to cover 0 debt will delete the bid.
+       *
+       * @param bidder_name the name or id of the account making the bid
+       * @param debt_amount the amount of debt of the named asset to bid for
+       * @param debt_symbol the name or id of the MPA to bid for
+       * @param additional_collateral the amount of additional collateral to bid
+       *        for taking over debt_amount. The asset type of this amount is
+       *        determined automatically from debt_symbol.
+       * @param broadcast true to broadcast the transaction on the network
+       * @returns the signed transaction creating/updating the bid
+       */
+      signed_transaction bid_collateral(string bidder_name, string debt_amount, string debt_symbol,
+                                        string additional_collateral, bool broadcast = false);
 
       /** Whitelist and blacklist accounts, primarily for transacting in whitelisted assets.
        *
@@ -1505,7 +1583,7 @@ FC_REFLECT( graphene::wallet::brain_key_info,
             (brain_priv_key)
             (wif_priv_key)
             (pub_key)
-          );
+          )
 
 FC_REFLECT( graphene::wallet::exported_account_keys, (account_name)(encrypted_private_keys)(public_keys) )
 
@@ -1538,6 +1616,12 @@ FC_REFLECT_DERIVED( graphene::wallet::vesting_balance_object_with_info, (graphen
 FC_REFLECT( graphene::wallet::operation_detail, 
             (memo)(description)(op) )
 
+FC_REFLECT(graphene::wallet::operation_detail_ex,
+            (memo)(description)(op)(transaction_id))
+
+FC_REFLECT( graphene::wallet::account_history_operation_detail,
+        (total_count)(result_count)(details))
+
 FC_API( graphene::wallet::wallet_api,
         (help)
         (gethelp)
@@ -1549,6 +1633,7 @@ FC_API( graphene::wallet::wallet_api,
         (set_fees_on_builder_transaction)
         (preview_builder_transaction)
         (sign_builder_transaction)
+        (broadcast_transaction)
         (propose_builder_transaction)
         (propose_builder_transaction2)
         (remove_builder_transaction)
@@ -1565,12 +1650,11 @@ FC_API( graphene::wallet::wallet_api,
         (import_account_keys)
         (import_balance)
         (suggest_brain_key)
+        (derive_owner_keys_from_brain_key)
         (register_account)
         (upgrade_account)
         (create_account_with_brain_key)
         (sell_asset)
-        (sell)
-        (buy)
         (borrow_asset)
         (cancel_order)
         (transfer)
@@ -1588,6 +1672,7 @@ FC_API( graphene::wallet::wallet_api,
         (reserve_asset)
         (global_settle_asset)
         (settle_asset)
+        (bid_collateral)
         (whitelist_account)
         (create_committee_member)
         (get_witness)
@@ -1609,6 +1694,10 @@ FC_API( graphene::wallet::wallet_api,
         (get_block)
         (get_account_count)
         (get_account_history)
+        (get_relative_account_history)
+        (get_account_history_by_operations)
+        (get_collateral_bids)
+        (is_public_key_registered)
         (get_market_history)
         (get_global_properties)
         (get_dynamic_global_properties)
@@ -1635,6 +1724,8 @@ FC_API( graphene::wallet::wallet_api,
         (flood_network)
         (network_add_nodes)
         (network_get_connected_peers)
+        (sign_memo)
+        (read_memo)
         (set_key_label)
         (get_key_label)
         (get_public_key)

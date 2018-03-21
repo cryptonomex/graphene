@@ -35,6 +35,7 @@ class abstract_plugin
    public:
       virtual ~abstract_plugin(){}
       virtual std::string plugin_name()const = 0;
+      virtual std::string plugin_description()const = 0;
 
       /**
        * @brief Perform early startup routines and register plugin indexes, callbacks, etc.
@@ -100,6 +101,7 @@ class plugin : public abstract_plugin
       virtual ~plugin() override;
 
       virtual std::string plugin_name()const override;
+      virtual std::string plugin_description()const override;
       virtual void plugin_initialize( const boost::program_options::variables_map& options ) override;
       virtual void plugin_startup() override;
       virtual void plugin_shutdown() override;
@@ -121,16 +123,24 @@ class plugin : public abstract_plugin
 /// @group Some useful tools for boost::program_options arguments using vectors of JSON strings
 /// @{
 template<typename T>
-T dejsonify(const string& s)
+T dejsonify(const string& s, uint32_t max_depth)
 {
-   return fc::json::from_string(s).as<T>();
+   return fc::json::from_string(s).as<T>(max_depth);
+}
+
+namespace impl {
+   template<typename T>
+   T dejsonify( const string& s )
+   {
+      return graphene::app::dejsonify<T>( s, GRAPHENE_MAX_NESTED_OBJECTS );
+   }
 }
 
 #define DEFAULT_VALUE_VECTOR(value) default_value({fc::json::to_string(value)}, fc::json::to_string(value))
 #define LOAD_VALUE_SET(options, name, container, type) \
 if( options.count(name) ) { \
       const std::vector<std::string>& ops = options[name].as<std::vector<std::string>>(); \
-      std::transform(ops.begin(), ops.end(), std::inserter(container, container.end()), &graphene::app::dejsonify<type>); \
+      std::transform(ops.begin(), ops.end(), std::inserter(container, container.end()), &graphene::app::impl::dejsonify<type>); \
 }
 /// @}
 

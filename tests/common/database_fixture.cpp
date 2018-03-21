@@ -26,6 +26,7 @@
 
 #include <graphene/account_history/account_history_plugin.hpp>
 #include <graphene/market_history/market_history_plugin.hpp>
+#include <graphene/grouped_orders/grouped_orders_plugin.hpp>
 
 #include <graphene/db/simple_index.hpp>
 
@@ -73,6 +74,7 @@ database_fixture::database_fixture()
    }
    auto ahplugin = app.register_plugin<graphene::account_history::account_history_plugin>();
    auto mhplugin = app.register_plugin<graphene::market_history::market_history_plugin>();
+   auto goplugin = app.register_plugin<graphene::grouped_orders::grouped_orders_plugin>();
    init_account_pub_key = init_account_priv_key.get_public_key();
 
    boost::program_options::variables_map options;
@@ -80,7 +82,7 @@ database_fixture::database_fixture()
    genesis_state.initial_timestamp = time_point_sec( GRAPHENE_TESTING_GENESIS_TIMESTAMP );
 
    genesis_state.initial_active_witnesses = 10;
-   for( int i = 0; i < genesis_state.initial_active_witnesses; ++i )
+   for( unsigned int i = 0; i < genesis_state.initial_active_witnesses; ++i )
    {
       auto name = "init"+fc::to_string(i);
       genesis_state.initial_accounts.emplace_back(name,
@@ -93,14 +95,36 @@ database_fixture::database_fixture()
    genesis_state.initial_parameters.current_fees->zero_all_fees();
    open_database();
 
-   // app.initialize();
+   // add account tracking for ahplugin for special test case with track-account enabled
+   if( !options.count("track-account") && boost::unit_test::framework::current_test_case().p_name.value == "track_account") {
+      std::vector<std::string> track_account;
+      std::string track = "\"1.2.17\"";
+      track_account.push_back(track);
+      options.insert(std::make_pair("track-account", boost::program_options::variable_value(track_account, false)));
+   }
+   // account tracking 2 accounts
+   if( !options.count("track-account") && boost::unit_test::framework::current_test_case().p_name.value == "track_account2") {
+      std::vector<std::string> track_account;
+      std::string track = "\"1.2.0\"";
+      track_account.push_back(track);
+      track = "\"1.2.16\"";
+      track_account.push_back(track);
+      options.insert(std::make_pair("track-account", boost::program_options::variable_value(track_account, false)));
+   }
+
    ahplugin->plugin_set_app(&app);
    ahplugin->plugin_initialize(options);
+
+   options.insert(std::make_pair("bucket-size", boost::program_options::variable_value(string("[15]"),false)));
    mhplugin->plugin_set_app(&app);
    mhplugin->plugin_initialize(options);
 
+   goplugin->plugin_set_app(&app);
+   goplugin->plugin_initialize(options);
+
    ahplugin->plugin_startup();
    mhplugin->plugin_startup();
+   goplugin->plugin_startup();
 
    generate_block();
 
@@ -124,9 +148,6 @@ database_fixture::~database_fixture()
       verify_account_history_plugin_index();
       BOOST_CHECK( db.get_node_properties().skip_flags == database::skip_nothing );
    }
-
-   if( data_dir )
-      db.close();
    return;
 } FC_CAPTURE_AND_RETHROW() }
 
@@ -154,6 +175,7 @@ void database_fixture::verify_asset_supplies( const database& db )
    const simple_index<account_statistics_object>& statistics_index = db.get_index_type<simple_index<account_statistics_object>>();
    const auto& balance_index = db.get_index_type<account_balance_index>().indices();
    const auto& settle_index = db.get_index_type<force_settlement_index>().indices();
+   const auto& bids = db.get_index_type<collateral_bid_index>().indices();
    map<asset_id_type,share_type> total_balances;
    map<asset_id_type,share_type> total_debts;
    share_type core_in_orders;
@@ -163,6 +185,8 @@ void database_fixture::verify_asset_supplies( const database& db )
       total_balances[b.asset_type] += b.balance;
    for( const force_settlement_object& s : settle_index )
       total_balances[s.balance.asset_id] += s.balance.amount;
+   for( const collateral_bid_object& b : bids )
+      total_balances[b.inv_swan_price.base.asset_id] += b.inv_swan_price.base.amount;
    for( const account_statistics_object& a : statistics_index )
    {
       reported_core_in_orders += a.total_core_in_orders;
@@ -184,15 +208,15 @@ void database_fixture::verify_asset_supplies( const database& db )
    }
    for( const asset_object& asset_obj : db.get_index_type<asset_index>().indices() )
    {
-      total_balances[asset_obj.id] += asset_obj.dynamic_asset_data_id(db).accumulated_fees;
-      if( asset_obj.id != asset_id_type() )
-         BOOST_CHECK_EQUAL(total_balances[asset_obj.id].value, asset_obj.dynamic_asset_data_id(db).current_supply.value);
-      total_balances[asset_id_type()] += asset_obj.dynamic_asset_data_id(db).fee_pool;
+      const auto& dasset_obj = asset_obj.dynamic_asset_data_id(db);
+      total_balances[asset_obj.id] += dasset_obj.accumulated_fees;
+      total_balances[asset_id_type()] += dasset_obj.fee_pool;
       if( asset_obj.is_market_issued() )
       {
          const auto& bad = asset_obj.bitasset_data(db);
          total_balances[bad.options.short_backing_asset] += bad.settlement_fund;
       }
+      total_balances[asset_obj.id] += dasset_obj.confidential_supply.value;
    }
    for( const vesting_balance_object& vbo : db.get_index_type< vesting_balance_index >().indices() )
       total_balances[ vbo.balance.asset_id ] += vbo.balance.amount;
@@ -206,8 +230,12 @@ void database_fixture::verify_asset_supplies( const database& db )
       BOOST_CHECK_EQUAL(item.first(db).dynamic_asset_data_id(db).current_supply.value, item.second.value);
    }
 
+   for( const asset_object& asset_obj : db.get_index_type<asset_index>().indices() )
+   {
+      BOOST_CHECK_EQUAL(total_balances[asset_obj.id].value, asset_obj.dynamic_asset_data_id(db).current_supply.value);
+   }
+
    BOOST_CHECK_EQUAL( core_in_orders.value , reported_core_in_orders.value );
-   BOOST_CHECK_EQUAL( total_balances[asset_id_type()].value , core_asset_data.current_supply.value - core_asset_data.confidential_supply.value);
 //   wlog("***  End  asset supply verification ***");
 }
 
@@ -299,7 +327,7 @@ void database_fixture::open_database()
 {
    if( !data_dir ) {
       data_dir = fc::temp_directory( graphene::utilities::temp_directory_path() );
-      db.open(data_dir->path(), [this]{return genesis_state;});
+      db.open(data_dir->path(), [this]{return genesis_state;}, "test");
    }
 }
 
@@ -865,6 +893,22 @@ void database_fixture::cover(const account_object& who, asset what, asset collat
    verify_asset_supplies(db);
 } FC_CAPTURE_AND_RETHROW( (who.name)(what)(collateral) ) }
 
+void database_fixture::bid_collateral(const account_object& who, const asset& to_bid, const asset& to_cover)
+{ try {
+   set_expiration( db, trx );
+   trx.operations.clear();
+   bid_collateral_operation bid;
+   bid.bidder = who.id;
+   bid.additional_collateral = to_bid;
+   bid.debt_covered = to_cover;
+   trx.operations.push_back(bid);
+   for( auto& op : trx.operations ) db.current_fee_schedule().set_fee(op);
+   trx.validate();
+   db.push_transaction(trx, ~0);
+   trx.operations.clear();
+   verify_asset_supplies(db);
+} FC_CAPTURE_AND_RETHROW( (who.name)(to_bid)(to_cover) ) }
+
 void database_fixture::fund_fee_pool( const account_object& from, const asset_object& asset_to_fund, const share_type amount )
 {
    asset_fund_fee_pool_operation fund;
@@ -1050,6 +1094,24 @@ vector< operation_history_object > database_fixture::get_operation_history( acco
       if(node->next == account_transaction_history_id_type())
          break;
       node = db.find(node->next);
+   }
+   return result;
+}
+
+vector< graphene::market_history::order_history_object > database_fixture::get_market_order_history( asset_id_type a, asset_id_type b )const
+{
+   const auto& history_idx = db.get_index_type<graphene::market_history::history_index>().indices().get<graphene::market_history::by_key>();
+   graphene::market_history::history_key hkey;
+   if( a > b ) std::swap(a,b);
+   hkey.base = a;
+   hkey.quote = b;
+   hkey.sequence = std::numeric_limits<int64_t>::min();
+   auto itr = history_idx.lower_bound( hkey );
+   vector<graphene::market_history::order_history_object> result;
+   while( itr != history_idx.end())
+   {
+       result.push_back( *itr );
+       ++itr;
    }
    return result;
 }

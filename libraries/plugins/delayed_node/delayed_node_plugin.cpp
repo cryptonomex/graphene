@@ -58,14 +58,14 @@ delayed_node_plugin::~delayed_node_plugin()
 void delayed_node_plugin::plugin_set_program_options(bpo::options_description& cli, bpo::options_description& cfg)
 {
    cli.add_options()
-         ("trusted-node", boost::program_options::value<std::string>()->required(), "RPC endpoint of a trusted validating node (required)")
+         ("trusted-node", boost::program_options::value<std::string>(), "RPC endpoint of a trusted validating node (required)")
          ;
    cfg.add(cli);
 }
 
 void delayed_node_plugin::connect()
 {
-   my->client_connection = std::make_shared<fc::rpc::websocket_api_connection>(*my->client.connect(my->remote_endpoint));
+   my->client_connection = std::make_shared<fc::rpc::websocket_api_connection>(*my->client.connect(my->remote_endpoint), GRAPHENE_NET_MAX_NESTED_OBJECTS);
    my->database_api = my->client_connection->get_remote_api<graphene::app::database_api>(0);
    my->client_connection_closed = my->client_connection->closed.connect([this] {
       connection_failed();
@@ -74,6 +74,7 @@ void delayed_node_plugin::connect()
 
 void delayed_node_plugin::plugin_initialize(const boost::program_options::variables_map& options)
 {
+   FC_ASSERT(options.count("trusted-node") > 0);
    my->remote_endpoint = "ws://" + options.at("trusted-node").as<std::string>();
 }
 
@@ -142,7 +143,7 @@ void delayed_node_plugin::plugin_startup()
       connect();
       my->database_api->set_block_applied_callback([this]( const fc::variant& block_id )
       {
-         fc::from_variant( block_id, my->last_received_remote_head );
+         fc::from_variant( block_id, my->last_received_remote_head, GRAPHENE_MAX_NESTED_OBJECTS );
       } );
       return;
    }

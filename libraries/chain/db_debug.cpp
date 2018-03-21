@@ -43,6 +43,7 @@ void database::debug_dump()
 
    const auto& balance_index = db.get_index_type<account_balance_index>().indices();
    const simple_index<account_statistics_object>& statistics_index = db.get_index_type<simple_index<account_statistics_object>>();
+   const auto& bids = db.get_index_type<collateral_bid_index>().indices();
    map<asset_id_type,share_type> total_balances;
    map<asset_id_type,share_type> total_debts;
    share_type core_in_orders;
@@ -58,6 +59,8 @@ void database::debug_dump()
     //  idump(("statistics")(s));
       reported_core_in_orders += s.total_core_in_orders;
    }
+   for( const collateral_bid_object& b : bids )
+      total_balances[b.inv_swan_price.base.asset_id] += b.inv_swan_price.base.amount;
    for( const limit_order_object& o : db.get_index_type<limit_order_index>().indices() )
    {
  //     idump(("limit_order")(o));
@@ -143,25 +146,19 @@ void debug_apply_update( database& db, const fc::variant_object& vo )
    switch( action )
    {
       case db_action_create:
-         /*
-         idx.create( [&]( object& obj )
-         {
-            idx.object_from_variant( vo, obj );
-         } );
-         */
          FC_ASSERT( false );
          break;
       case db_action_write:
          db.modify( db.get_object( oid ), [&]( object& obj )
          {
             idx.object_default( obj );
-            idx.object_from_variant( vo, obj );
+            idx.object_from_variant( vo, obj, GRAPHENE_MAX_NESTED_OBJECTS );
          } );
          break;
       case db_action_update:
          db.modify( db.get_object( oid ), [&]( object& obj )
          {
-            idx.object_from_variant( vo, obj );
+            idx.object_from_variant( vo, obj, GRAPHENE_MAX_NESTED_OBJECTS );
          } );
          break;
       case db_action_delete:

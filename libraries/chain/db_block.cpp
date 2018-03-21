@@ -29,6 +29,7 @@
 #include <graphene/chain/block_summary_object.hpp>
 #include <graphene/chain/global_property_object.hpp>
 #include <graphene/chain/operation_history_object.hpp>
+
 #include <graphene/chain/proposal_object.hpp>
 #include <graphene/chain/transaction_object.hpp>
 #include <graphene/chain/witness_object.hpp>
@@ -112,7 +113,7 @@ std::vector<block_id_type> database::get_block_ids_on_fork(block_id_type head_of
  */
 bool database::push_block(const signed_block& new_block, uint32_t skip)
 {
-   //idump((new_block.block_num())(new_block.id())(new_block.timestamp)(new_block.previous));
+//   idump((new_block.block_num())(new_block.id())(new_block.timestamp)(new_block.previous));
    bool result;
    detail::with_skip_flags( *this, skip, [&]()
    {
@@ -241,12 +242,12 @@ processed_transaction database::_push_transaction( const signed_transaction& trx
    auto processed_trx = _apply_transaction( trx );
    _pending_tx.push_back(processed_trx);
 
-   notify_changed_objects();
+   // notify_changed_objects();
    // The transaction applied successfully. Merge its changes into the pending block session.
    temp_session.merge();
 
    // notify anyone listening to pending transactions
-   on_pending_transaction( trx );
+   notify_on_pending_transaction( trx );
    return processed_trx;
 }
 
@@ -285,7 +286,7 @@ processed_transaction database::push_proposal(const proposal_object& proposal)
       {
          _applied_ops.resize( old_applied_ops_size );
       }
-      elog( "e", ("e",e.to_detail_string() ) );
+      elog( "${e}", ("e",e.to_detail_string() ) );
       throw;
    }
 
@@ -422,7 +423,6 @@ void database::pop_block()
    GRAPHENE_ASSERT( head_block.valid(), pop_empty_chain, "there are no blocks to pop" );
 
    _fork_db.pop_block();
-   _block_id_to_block.remove( head_id );
    pop_undo();
 
    _popped_tx.insert( _popped_tx.begin(), head_block->transactions.begin(), head_block->transactions.end() );
@@ -538,30 +538,13 @@ void database::_apply_block( const signed_block& next_block )
       apply_debug_updates();
 
    // notify observers that the block has been applied
-   applied_block( next_block ); //emit
+   notify_applied_block( next_block ); //emit
    _applied_ops.clear();
 
    notify_changed_objects();
 } FC_CAPTURE_AND_RETHROW( (next_block.block_num()) )  }
 
-void database::notify_changed_objects()
-{ try {
-   if( _undo_db.enabled() ) 
-   {
-      const auto& head_undo = _undo_db.head();
-      vector<object_id_type> changed_ids;  changed_ids.reserve(head_undo.old_values.size());
-      for( const auto& item : head_undo.old_values ) changed_ids.push_back(item.first);
-      for( const auto& item : head_undo.new_ids ) changed_ids.push_back(item);
-      vector<const object*> removed;
-      removed.reserve( head_undo.removed.size() );
-      for( const auto& item : head_undo.removed )
-      {
-         changed_ids.push_back( item.first );
-         removed.emplace_back( item.second.get() );
-      }
-      changed_objects(changed_ids);
-   }
-} FC_CAPTURE_AND_RETHROW() }
+
 
 processed_transaction database::apply_transaction(const signed_transaction& trx, uint32_t skip)
 {
@@ -648,18 +631,15 @@ operation_result database::apply_operation(transaction_evaluation_state& eval_st
 { try {
    int i_which = op.which();
    uint64_t u_which = uint64_t( i_which );
-   if( i_which < 0 )
-      assert( "Negative operation tag" && false );
-   if( u_which >= _operation_evaluators.size() )
-      assert( "No registered evaluator for this operation" && false );
+   FC_ASSERT( i_which >= 0, "Negative operation tag in operation ${op}", ("op",op) );
+   FC_ASSERT( u_which < _operation_evaluators.size(), "No registered evaluator for operation ${op}", ("op",op) );
    unique_ptr<op_evaluator>& eval = _operation_evaluators[ u_which ];
-   if( !eval )
-      assert( "No registered evaluator for this operation" && false );
+   FC_ASSERT( eval, "No registered evaluator for operation ${op}", ("op",op) );
    auto op_id = push_applied_operation( op );
    auto result = eval->evaluate( eval_state, op, true );
    set_applied_operation_result( op_id, result );
    return result;
-} FC_CAPTURE_AND_RETHROW(  ) }
+} FC_CAPTURE_AND_RETHROW( (op) ) }
 
 const witness_object& database::validate_block_header( uint32_t skip, const signed_block& next_block )const
 {

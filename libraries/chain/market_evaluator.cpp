@@ -35,6 +35,7 @@
 #include <graphene/chain/protocol/market.hpp>
 
 #include <fc/uint128.hpp>
+#include <fc/smart_ref_impl.hpp>
 
 namespace graphene { namespace chain {
 void_result limit_order_create_evaluator::do_evaluate(const limit_order_create_operation& op)
@@ -146,13 +147,6 @@ void_result call_order_update_evaluator::do_evaluate(const call_order_update_ope
    else if( _bitasset_data->current_feed.settlement_price.is_null() )
       FC_THROW_EXCEPTION(insufficient_feeds, "Cannot borrow asset with no price feed.");
 
-   if( o.delta_debt.amount < 0 )
-   {
-      FC_ASSERT( d.get_balance(*_paying_account, *_debt_asset) >= o.delta_debt,
-                 "Cannot cover by ${c} when payer only has ${b}",
-                 ("c", o.delta_debt.amount)("b", d.get_balance(*_paying_account, *_debt_asset).amount) );
-   }
-
    if( o.delta_collateral.amount > 0 )
    {
       FC_ASSERT( d.get_balance(*_paying_account, _bitasset_data->options.short_backing_asset(d)) >= o.delta_collateral,
@@ -175,7 +169,7 @@ void_result call_order_update_evaluator::do_apply(const call_order_update_operat
       // Deduct the debt paid from the total supply of the debt asset.
       d.modify(_debt_asset->dynamic_asset_data_id(d), [&](asset_dynamic_data_object& dynamic_asset) {
          dynamic_asset.current_supply += o.delta_debt.amount;
-         assert(dynamic_asset.current_supply >= 0);
+         FC_ASSERT(dynamic_asset.current_supply >= 0);
       });
    }
 
@@ -270,6 +264,63 @@ void_result call_order_update_evaluator::do_apply(const call_order_update_operat
             );
       }
    }
+
+   return void_result();
+} FC_CAPTURE_AND_RETHROW( (o) ) }
+
+void_result bid_collateral_evaluator::do_evaluate(const bid_collateral_operation& o)
+{ try {
+   database& d = db();
+
+   FC_ASSERT( d.head_block_time() > HARDFORK_CORE_216_TIME, "Not yet!" );
+
+   _paying_account = &o.bidder(d);
+   _debt_asset     = &o.debt_covered.asset_id(d);
+   FC_ASSERT( _debt_asset->is_market_issued(), "Unable to cover ${sym} as it is not a collateralized asset.",
+              ("sym", _debt_asset->symbol) );
+
+   _bitasset_data  = &_debt_asset->bitasset_data(d);
+
+   FC_ASSERT( _bitasset_data->has_settlement() );
+
+   FC_ASSERT( o.additional_collateral.asset_id == _bitasset_data->options.short_backing_asset );
+
+   FC_ASSERT( !_bitasset_data->is_prediction_market, "Cannot bid on a prediction market!" );
+
+   if( o.additional_collateral.amount > 0 )
+   {
+      FC_ASSERT( d.get_balance(*_paying_account, _bitasset_data->options.short_backing_asset(d)) >= o.additional_collateral,
+                 "Cannot bid ${c} collateral when payer only has ${b}", ("c", o.additional_collateral.amount)
+                 ("b", d.get_balance(*_paying_account, o.additional_collateral.asset_id(d)).amount) );
+   }
+
+   const collateral_bid_index& bids = d.get_index_type<collateral_bid_index>();
+   const auto& index = bids.indices().get<by_account>();
+   const auto& bid = index.find( boost::make_tuple( o.debt_covered.asset_id, o.bidder ) );
+   if( bid != index.end() )
+      _bid = &(*bid);
+   else
+       FC_ASSERT( o.debt_covered.amount > 0, "Can't find bid to cancel?!");
+
+   return void_result();
+} FC_CAPTURE_AND_RETHROW( (o) ) }
+
+
+void_result bid_collateral_evaluator::do_apply(const bid_collateral_operation& o)
+{ try {
+   database& d = db();
+
+   if( _bid )
+      d.cancel_bid( *_bid, false );
+
+   if( o.debt_covered.amount == 0 ) return void_result();
+
+   d.adjust_balance( o.bidder, -o.additional_collateral  );
+
+   _bid = &d.create<collateral_bid_object>([&]( collateral_bid_object& bid ) {
+      bid.bidder = o.bidder;
+      bid.inv_swan_price = o.additional_collateral / o.debt_covered;
+   });
 
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (o) ) }
