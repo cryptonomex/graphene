@@ -43,8 +43,8 @@ SET(BOOST_COMPONENTS)
 LIST(APPEND BOOST_COMPONENTS thread
                              iostreams
                              date_time
-                             system
                              filesystem
+                             system
                              program_options
                              signals
                              serialization
