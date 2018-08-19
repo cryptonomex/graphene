@@ -34,13 +34,11 @@ namespace graphene { namespace db {
    using  fc::flat_map;
    using  fc::variant;
    using  fc::unsigned_int;
-   using  fc::signed_int;
 
    struct object_id_type
    {
       object_id_type( uint8_t s, uint8_t t, uint64_t i )
       {
-         assert( i>>48 == 0 );
          FC_ASSERT( i >> 48 == 0, "instance overflow", ("instance",i) );
          number = (uint64_t(s)<<56) | (uint64_t(t)<<48) | i;
       }
@@ -169,12 +167,12 @@ struct reflector<graphene::db::object_id<SpaceID,TypeID,T> >
 };
 
 
- inline void to_variant( const graphene::db::object_id_type& var,  fc::variant& vo )
+ inline void to_variant( const graphene::db::object_id_type& var,  fc::variant& vo, uint32_t max_depth = 1 )
  {
     vo = std::string( var );
  }
 
- inline void from_variant( const fc::variant& var,  graphene::db::object_id_type& vo )
+ inline void from_variant( const fc::variant& var,  graphene::db::object_id_type& vo, uint32_t max_depth = 1 )
  { try {
     vo.number = 0;
     const auto& s = var.get_string();
@@ -191,12 +189,12 @@ struct reflector<graphene::db::object_id<SpaceID,TypeID,T> >
     vo.number |= (space_id << 56) | (type_id << 48);
  } FC_CAPTURE_AND_RETHROW( (var) ) }
  template<uint8_t SpaceID, uint8_t TypeID, typename T>
- void to_variant( const graphene::db::object_id<SpaceID,TypeID,T>& var,  fc::variant& vo )
+ void to_variant( const graphene::db::object_id<SpaceID,TypeID,T>& var,  fc::variant& vo, uint32_t max_depth = 1 )
  {
     vo = fc::to_string(SpaceID) + "." + fc::to_string(TypeID) + "." + fc::to_string(var.instance.value);
  }
  template<uint8_t SpaceID, uint8_t TypeID, typename T>
- void from_variant( const fc::variant& var,  graphene::db::object_id<SpaceID,TypeID,T>& vo )
+ void from_variant( const fc::variant& var,  graphene::db::object_id<SpaceID,TypeID,T>& vo, uint32_t max_depth = 1 )
  { try {
     const auto& s = var.get_string();
     auto first_dot = s.find('.');

@@ -1,95 +1,110 @@
-Intro for new developers
-------------------------
+BitShares Core
+==============
 
-This is a quick introduction to get new developers up to speed on Graphene.
+[Build Status](https://travis-ci.org/bitshares/bitshares-core/branches):
 
-Starting Graphene
------------------
+`master` | `develop` | `hardfork` | `testnet` | `bitshares-fc` 
+ --- | --- | --- | --- | ---
+ [![](https://travis-ci.org/bitshares/bitshares-core.svg?branch=master)](https://travis-ci.org/bitshares/bitshares-core) | [![](https://travis-ci.org/bitshares/bitshares-core.svg?branch=develop)](https://travis-ci.org/bitshares/bitshares-core) | [![](https://travis-ci.org/bitshares/bitshares-core.svg?branch=hardfork)](https://travis-ci.org/bitshares/bitshares-core) | [![](https://travis-ci.org/bitshares/bitshares-core.svg?branch=testnet)](https://travis-ci.org/bitshares/bitshares-core) | [![](https://travis-ci.org/bitshares/bitshares-fc.svg?branch=master)](https://travis-ci.org/bitshares/bitshares-fc) 
 
-For Ubuntu 14.04 LTS users, see this link first:
-    https://github.com/cryptonomex/graphene/wiki/build-ubuntu
 
-and then proceed with:
+* [Getting Started](#getting-started)
+* [Support](#support)
+* [Using the API](#using-the-api)
+* [Accessing restricted API's](#accessing-restricted-apis)
+* [FAQ](#faq)
+* [License](#license)
 
-    git clone https://github.com/cryptonomex/graphene.git
-    cd graphene
+BitShares Core is the BitShares blockchain implementation and command-line interface.
+The web wallet is [BitShares UI](https://github.com/bitshares/bitshares-ui).
+
+Visit [BitShares.org](https://bitshares.org/) to learn about BitShares and join the community at [BitSharesTalk.org](https://bitsharestalk.org/).
+
+Getting Started
+---------------
+Build instructions and additional documentation are available in the
+[wiki](https://github.com/bitshares/bitshares-core/wiki).
+
+We recommend building on Ubuntu 16.04 LTS (64-bit) 
+
+**Build Dependencies**:
+
+    sudo apt-get update
+    sudo apt-get install autoconf cmake make automake libtool git libboost-all-dev libssl-dev g++ libcurl4-openssl-dev
+
+**Build Script:**
+
+    git clone https://github.com/bitshares/bitshares-core.git
+    cd bitshares-core
+    git checkout master # may substitute "master" with current release tag
     git submodule update --init --recursive
-    cmake -DCMAKE_BUILD_TYPE=Debug .
+    cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .
     make
+
+**Upgrade Script** (prepend to the Build Script above if you built a prior release):
+
+    git remote set-url origin https://github.com/bitshares/bitshares-core.git
+    git checkout master
+    git remote set-head origin --auto
+    git pull
+    git submodule update --init --recursive # this command may fail
+    git submodule sync --recursive
+    git submodule update --init --recursive
+
+**NOTE:** BitShares requires a [Boost](http://www.boost.org/) version in the range [1.57 - 1.65.1]. Versions earlier than
+1.57 or newer than 1.65.1 are NOT supported. If your system's Boost version is newer, then you will need to manually build
+an older version of Boost and specify it to CMake using `DBOOST_ROOT`.
+
+**NOTE:** BitShares requires a 64-bit operating system to build, and will not build on a 32-bit OS.
+
+**NOTE:** BitShares now supports Ubuntu 18.04 LTS
+
+**NOTE:** BitShares now supports OpenSSL 1.1.0
+
+**After Building**, the `witness_node` can be launched with:
+
     ./programs/witness_node/witness_node
 
-This will launch the witness node. If you would like to launch the command-line wallet, you must first specify a port
-for communication with the witness node. To do this, add text to `witness_node_data_dir/config.ini` as follows, then
-restart the node:
+The node will automatically create a data directory including a config file. It may take several hours to fully synchronize
+the blockchain. After syncing, you can exit the node using Ctrl+C and setup the command-line wallet by editing
+`witness_node_data_dir/config.ini` as follows:
 
     rpc-endpoint = 127.0.0.1:8090
 
-Then, in a separate terminal window, start the command-line wallet `cli_wallet`:
+**IMPORTANT:** By default the witness node will start in reduced memory ram mode by using some of the commands detailed in [Memory reduction for nodes](https://github.com/bitshares/bitshares-core/wiki/Memory-reduction-for-nodes).
+In order to run a full node with all the account history you need to remove `partial-operations` and `max-ops-per-account` from your config file. Please note that currently(2018-07-02) a full node will need more than 100GB of RAM to operate and required memory is growing fast. Consider the following table before running a node:
+
+| Default | Full | Minimal  | ElasticSearch 
+| --- | --- | --- | ---
+| 16G RAM | 120G RAM | 4G RAM | 500G SSD HD, 32G RAM
+
+After starting the witness node again, in a separate terminal you can run:
 
     ./programs/cli_wallet/cli_wallet
 
-To set your iniital password to 'password' use:
+Set your inital password:
 
-    >>> set_password password
-    >>> unlock password
+    >>> set_password <PASSWORD>
+    >>> unlock <PASSWORD>
 
 To import your initial balance:
 
-    >>> import_balance nathan [5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3] true
+    >>> import_balance <ACCOUNT NAME> [<WIF_KEY>] true
 
 If you send private keys over this connection, `rpc-endpoint` should be bound to localhost for security.
 
-A list of CLI wallet commands is available
-[here](https://github.com/cryptonomex/graphene/blob/master/libraries/wallet/include/graphene/wallet/wallet.hpp).
+Use `help` to see all available wallet commands. Source definition and listing of all commands is available
+[here](https://github.com/bitshares/bitshares-core/blob/master/libraries/wallet/include/graphene/wallet/wallet.hpp).
 
-Code coverage testing
----------------------
+Support
+-------
+Technical support is available in the [BitSharesTalk technical support subforum](https://bitsharestalk.org/index.php?board=45.0).
 
-Check how much code is covered by unit tests, using gcov/lcov (see http://ltp.sourceforge.net/coverage/lcov.php ).
+BitShares Core bugs can be reported directly to the [issue tracker](https://github.com/bitshares/bitshares-core/issues).
 
-    cmake -D ENABLE_COVERAGE_TESTING=true -D CMAKE_BUILD_TYPE=Debug .
-    make
-    lcov --capture --initial --directory . --output-file base.info --no-external
-    libraries/fc/bloom_test
-    libraries/fc/task_cancel_test
-    libraries/fc/api
-    libraries/fc/blind
-    libraries/fc/ecc_test test
-    libraries/fc/real128_test
-    libraries/fc/lzma_test README.md
-    libraries/fc/ntp_test
-    tests/intense_test
-    tests/app_test
-    tests/chain_bench
-    tests/chain_test
-    tests/performance_test
-    lcov --capture --directory . --output-file test.info --no-external
-    lcov --add-tracefile base.info --add-tracefile test.info --output-file total.info
-    lcov -o interesting.info -r total.info libraries/fc/vendor/\* libraries/fc/tests/\* tests/\*
-    mkdir -p lcov
-    genhtml interesting.info --output-directory lcov --prefix `pwd`
+BitShares UI bugs should be reported to the [UI issue tracker](https://github.com/bitshares/bitshares-ui/issues)
 
-Now open `lcov/index.html` in a browser.
-
-Unit testing
-------------
-
-We use the Boost unit test framework for unit testing.  Most unit
-tests reside in the `chain_test` build target.
-
-Witness node
-------------
-
-The role of the witness node is to broadcast transactions, download blocks, and optionally sign them.
-
-```
-./witness_node --rpc-endpoint 127.0.0.1:8090 --enable-stale-production -w '"1.6.0"' '"1.6.1"' '"1.6.2"' '"1.6.3"' '"1.6.4"' '"1.6.5"' '"1.6.6"' '"1.6.7"' '"1.6.8"' '"1.6.9"' '"1.6.10"' '"1.6.11"' '"1.6.12"' '"1.6.13"' '"1.6.14"' '"1.6.15"' '"1.6.16"' '"1.6.17"' '"1.6.18"' '"1.6.19"' '"1.6.20"' '"1.6.21"' '"1.6.22"' '"1.6.23"' '"1.6.24"' '"1.6.25"' '"1.6.26"' '"1.6.27"' '"1.6.28"' '"1.6.29"' '"1.6.30"' '"1.6.31"' '"1.6.32"' '"1.6.33"' '"1.6.34"' '"1.6.35"' '"1.6.36"' '"1.6.37"' '"1.6.38"' '"1.6.39"' '"1.6.40"' '"1.6.41"' '"1.6.42"' '"1.6.43"' '"1.6.44"' '"1.6.45"' '"1.6.46"' '"1.6.47"' '"1.6.48"' '"1.6.49"' '"1.6.50"' '"1.6.51"' '"1.6.52"' '"1.6.53"' '"1.6.54"' '"1.6.55"' '"1.6.56"' '"1.6.57"' '"1.6.58"' '"1.6.59"' '"1.6.60"' '"1.6.61"' '"1.6.62"' '"1.6.63"' '"1.6.64"' '"1.6.65"' '"1.6.66"' '"1.6.67"' '"1.6.68"' '"1.6.69"' '"1.6.70"' '"1.6.71"' '"1.6.72"' '"1.6.73"' '"1.6.74"' '"1.6.75"' '"1.6.76"' '"1.6.77"' '"1.6.78"' '"1.6.79"' '"1.6.80"' '"1.6.81"' '"1.6.82"' '"1.6.83"' '"1.6.84"' '"1.6.85"' '"1.6.86"' '"1.6.87"' '"1.6.88"' '"1.6.89"' '"1.6.90"' '"1.6.91"' '"1.6.92"' '"1.6.93"' '"1.6.94"' '"1.6.95"' '"1.6.96"' '"1.6.97"' '"1.6.98"' '"1.6.99"' '"1.6.100"'
-```
-
-Running specific tests
-----------------------
-
-- `tests/chain_tests -t block_tests/name_of_test`
+Up to date online Doxygen documentation can be found at [Doxygen](https://bitshares.org/doxygen/hierarchy.html)
 
 Using the API
 -------------
@@ -118,7 +133,7 @@ API 0 is accessible using regular JSON-RPC:
 Accessing restricted API's
 --------------------------
 
-You can restrict API's to particular users by specifying an `apiaccess` file in `config.ini`.  Here is an example `apiaccess` file which allows
+You can restrict API's to particular users by specifying an `api-access` file in `config.ini` or by using the `--api-access /full/path/to/api-access.json` startup node command.  Here is an example `api-access` file which allows
 user `bytemaster` with password `supersecret` to access four different API's, while allowing any other user to access the three public API's
 necessary to use the wallet:
 
@@ -144,7 +159,7 @@ necessary to use the wallet:
        ]
     }
 
-Passwords are stored in `base64` as as salted `sha256` hashes.  A simple Python script, `saltpass.py` is avaliable to obtain hash and salt values from a password.
+Passwords are stored in `base64` as salted `sha256` hashes.  A simple Python script, `saltpass.py` is avaliable to obtain hash and salt values from a password.
 A single asterisk `"*"` may be specified as username or password hash to accept any value.
 
 With the above configuration, here is an example of how to call `add_node` from the `network_node` API:
@@ -162,13 +177,8 @@ If you want information which is not available from an API, it might be availabl
 from the [database](https://bitshares.github.io/doxygen/classgraphene_1_1chain_1_1database.html);
 it is fairly simple to write API methods to expose database methods.
 
-Running private testnet
------------------------
-
-See the [documentation](https://github.com/cryptonomex/graphene/wiki/private-testnet) if you want to run a private testnet.
-
-Questions
----------
+FAQ
+---
 
 - Is there a way to generate help with parameter names and method descriptions?
 
@@ -207,7 +217,7 @@ Questions
 
     The second number specifies the *type*.  The type of the object determines what fields it has.  For a
     complete list of type ID's, see `enum object_type` and `enum impl_object_type` in
-    [types.hpp](https://github.com/cryptonomex/graphene/blob/master/libraries/chain/include/graphene/chain/protocol/types.hpp).
+    [types.hpp](https://github.com/bitshares/bitshares-2/blob/bitshares/libraries/chain/include/graphene/chain/protocol/types.hpp).
 
     The third number specifies the *instance*.  The instance of the object is different for each individual
     object.
@@ -237,3 +247,8 @@ Questions
     less fine if your `witness_node` allows the general public to control which p2p nodes it's
     connecting to.  Therefore the API to add p2p connections needs to be set up with proper access
     controls.
+ 
+License
+-------
+BitShares Core is under the MIT license. See [LICENSE](https://github.com/bitshares/bitshares-core/blob/master/LICENSE.txt)
+for more information.

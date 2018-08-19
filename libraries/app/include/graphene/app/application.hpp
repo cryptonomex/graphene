@@ -35,6 +35,14 @@ namespace graphene { namespace app {
 
    class abstract_plugin;
 
+   class application_options
+   {
+      public:
+         // TODO change default to false when GUI is ready
+         bool enable_subscribe_to_all = true;
+         bool has_market_history_plugin = false;
+   };
+
    class application
    {
       public:
@@ -56,14 +64,15 @@ namespace graphene { namespace app {
             auto plug = std::make_shared<PluginType>();
             plug->plugin_set_app(this);
 
-            boost::program_options::options_description plugin_cli_options("Options for plugin " + plug->plugin_name()), plugin_cfg_options;
+            boost::program_options::options_description plugin_cli_options(plug->plugin_name() + " plugin. " + plug->plugin_description() + "\nOptions"), plugin_cfg_options;
+            //boost::program_options::options_description plugin_cli_options("Options for plugin " + plug->plugin_name()), plugin_cfg_options;
             plug->plugin_set_program_options(plugin_cli_options, plugin_cfg_options);
             if( !plugin_cli_options.options().empty() )
                _cli_options.add(plugin_cli_options);
             if( !plugin_cfg_options.options().empty() )
                _cfg_options.add(plugin_cfg_options);
 
-            add_plugin( plug->plugin_name(), plug );
+            add_available_plugin( plug );
             return plug;
          }
          std::shared_ptr<abstract_plugin> get_plugin( const string& name )const;
@@ -73,7 +82,7 @@ namespace graphene { namespace app {
          {
             std::shared_ptr<abstract_plugin> abs_plugin = get_plugin( name );
             std::shared_ptr<PluginType> result = std::dynamic_pointer_cast<PluginType>( abs_plugin );
-            FC_ASSERT( result != std::shared_ptr<PluginType>() );
+            FC_ASSERT( result != std::shared_ptr<PluginType>(), "Unable to load plugin '${p}'", ("p",name) );
             return result;
          }
 
@@ -88,8 +97,11 @@ namespace graphene { namespace app {
          /// Emitted when syncing finishes (is_finished_syncing will return true)
          boost::signals2::signal<void()> syncing_finished;
 
+         const application_options& get_options();
+
       private:
-         void add_plugin( const string& name, std::shared_ptr<abstract_plugin> p );
+         void enable_plugin( const string& name );
+         void add_available_plugin( std::shared_ptr<abstract_plugin> p );
          std::shared_ptr<detail::application_impl> my;
 
          boost::program_options::options_description _cli_options;

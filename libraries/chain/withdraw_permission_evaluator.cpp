@@ -59,21 +59,44 @@ object_id_type withdraw_permission_create_evaluator::do_apply(const operation_ty
 void_result withdraw_permission_claim_evaluator::do_evaluate(const withdraw_permission_claim_evaluator::operation_type& op)
 { try {
    const database& d = db();
+   time_point_sec head_block_time = d.head_block_time();
 
    const withdraw_permission_object& permit = op.withdraw_permission(d);
-   FC_ASSERT(permit.expiration > d.head_block_time() );
+   FC_ASSERT(permit.expiration > head_block_time);
    FC_ASSERT(permit.authorized_account == op.withdraw_to_account);
    FC_ASSERT(permit.withdraw_from_account == op.withdraw_from_account);
-   FC_ASSERT(op.amount_to_withdraw <= permit.available_this_period( d.head_block_time() ) );
+   if (head_block_time >= HARDFORK_23_TIME) {
+      FC_ASSERT(permit.period_start_time <= head_block_time);
+   }
+   FC_ASSERT(op.amount_to_withdraw <= permit.available_this_period( head_block_time ) );
    FC_ASSERT(d.get_balance(op.withdraw_from_account, op.amount_to_withdraw.asset_id) >= op.amount_to_withdraw);
 
    const asset_object& _asset = op.amount_to_withdraw.asset_id(d);
-   if( _asset.is_transfer_restricted() ) FC_ASSERT( _asset.issuer == permit.authorized_account || _asset.issuer == permit.withdraw_from_account );
+   if( _asset.is_transfer_restricted() )
+   {
+      FC_ASSERT( _asset.issuer == permit.authorized_account || _asset.issuer == permit.withdraw_from_account,
+                 "Asset ${a} '${sym}' has transfer_restricted flag enabled",
+                 ("a", _asset.id)("sym", _asset.symbol) );
+   }
 
-   const account_object& from  = op.withdraw_to_account(d);
    const account_object& to    = permit.authorized_account(d);
-   FC_ASSERT( is_authorized_asset( d, to, _asset ) );
-   FC_ASSERT( is_authorized_asset( d, from, _asset ) );
+   FC_ASSERT( is_authorized_asset( d, to, _asset ),
+              "Account ${acct} '${name}' is unauthorized to transact asset ${a} '${sym}' due to whitelist / blacklist",
+              ("acct", to.id)("name", to.name)("a", _asset.id)("sym", _asset.symbol) );
+
+   const account_object& from  = op.withdraw_from_account(d);
+   bool from_is_authorized = ( is_authorized_asset( d, from, _asset ) );
+   if( head_block_time > HARDFORK_CORE_942_TIME ) // TODO remove this check after hard fork if things in `else` did not occur
+   {
+      FC_ASSERT( from_is_authorized,
+                 "Account ${acct} '${name}' is unauthorized to withdraw asset ${a} '${sym}' due to whitelist / blacklist",
+                 ("acct", from.id)("name", from.name)("a", _asset.id)("sym", _asset.symbol) );
+   }
+   else
+   {
+      if( !from_is_authorized )
+         wlog( "Unauthorized asset withdrawal (issue #942) occurred at block ${b}", ("b", d.head_block_num()) );
+   }
 
    return void_result();
 } FC_CAPTURE_AND_RETHROW( (op) ) }
