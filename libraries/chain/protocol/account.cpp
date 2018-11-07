@@ -56,17 +56,18 @@ namespace graphene { namespace chain {
  * - Length is between (inclusive) GRAPHENE_MIN_ACCOUNT_NAME_LENGTH and GRAPHENE_MAX_ACCOUNT_NAME_LENGTH
  */
 bool is_valid_name( const string& name )
-{
-#if GRAPHENE_MIN_ACCOUNT_NAME_LENGTH < 3
-#error This is_valid_name implementation implicitly enforces minimum name length of 3.
-#endif
-
+{ try {
     const size_t len = name.size();
+
     if( len < GRAPHENE_MIN_ACCOUNT_NAME_LENGTH )
+    {
         return false;
+    }
 
     if( len > GRAPHENE_MAX_ACCOUNT_NAME_LENGTH )
+    {
         return false;
+    }
 
     size_t begin = 0;
     while( true )
@@ -74,8 +75,10 @@ bool is_valid_name( const string& name )
        size_t end = name.find_first_of( '.', begin );
        if( end == std::string::npos )
           end = len;
-       if( end - begin < 3 )
+       if( (end - begin) < GRAPHENE_MIN_ACCOUNT_NAME_LENGTH )
+       {
           return false;
+       }
        switch( name[begin] )
        {
           case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g': case 'h':
@@ -119,7 +122,7 @@ bool is_valid_name( const string& name )
        begin = end+1;
     }
     return true;
-}
+} FC_CAPTURE_AND_RETHROW( (name) ) }
 
 bool is_cheap_name( const string& n )
 {

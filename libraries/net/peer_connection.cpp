@@ -29,6 +29,8 @@
 
 #include <fc/thread/thread.hpp>
 
+#include <boost/scope_exit.hpp>
+
 #ifdef DEFAULT_LOGGER
 # undef DEFAULT_LOGGER
 #endif
@@ -86,11 +88,12 @@ namespace graphene { namespace net
       inhibit_fetching_sync_blocks(false),
       transaction_fetching_inhibited_until(fc::time_point::min()),
       last_known_fork_block_number(0),
-      firewall_check_state(nullptr)
+      firewall_check_state(nullptr),
 #ifndef NDEBUG
-      ,_thread(&fc::thread::current()),
-      _send_message_queue_tasks_running(0)
+      _thread(&fc::thread::current()),
+      _send_message_queue_tasks_running(0),
 #endif
+      _currently_handling_message(false)
     {
     }
 
@@ -257,7 +260,7 @@ namespace graphene { namespace net
       }
       catch ( fc::exception& e )
       {
-        elog( "fatal: error connecting to peer ${remote_endpoint}: ${e}", ("remote_endpoint", remote_endpoint )("e", e.to_detail_string() ) );
+        wlog( "error connecting to peer ${remote_endpoint}: ${e}", ("remote_endpoint", remote_endpoint )("e", e.to_detail_string() ) );
         throw;
       }
     } // connect_to()
@@ -265,6 +268,10 @@ namespace graphene { namespace net
     void peer_connection::on_message( message_oriented_connection* originating_connection, const message& received_message )
     {
       VERIFY_CORRECT_THREAD();
+      _currently_handling_message = true;
+      BOOST_SCOPE_EXIT(this_) {
+        this_->_currently_handling_message = false;
+      } BOOST_SCOPE_EXIT_END
       _node->on_message( this, received_message );
     }
 
@@ -305,24 +312,24 @@ namespace graphene { namespace net
         }
         catch (const fc::exception& send_error)
         {
-          elog("Error sending message: ${exception}.  Closing connection.", ("exception", send_error));
+          wlog("Error sending message: ${exception}.  Closing connection.", ("exception", send_error));
           try
           {
             close_connection();
           }
           catch (const fc::exception& close_error)
           {
-            elog("Caught error while closing connection: ${exception}", ("exception", close_error));
+            wlog("Caught error while closing connection: ${exception}", ("exception", close_error));
           }
           return;
         }
         catch (const std::exception& e)
         {
-          elog("message_oriented_exception::send_message() threw a std::exception(): ${what}", ("what", e.what()));
+          wlog("message_oriented_exception::send_message() threw a std::exception(): ${what}", ("what", e.what()));
         }
         catch (...)
         {
-          elog("message_oriented_exception::send_message() threw an unhandled exception");
+          wlog("message_oriented_exception::send_message() threw an unhandled exception");
         }
         _queued_messages.front()->transmission_finish_time = fc::time_point::now();
         _total_queued_messages_size -= _queued_messages.front()->get_size_in_queue();
@@ -338,7 +345,7 @@ namespace graphene { namespace net
       _queued_messages.emplace(std::move(message_to_send));
       if (_total_queued_messages_size > GRAPHENE_NET_MAXIMUM_QUEUED_MESSAGES_IN_BYTES)
       {
-        elog("send queue exceeded maximum size of ${max} bytes (current size ${current} bytes)",
+        wlog("send queue exceeded maximum size of ${max} bytes (current size ${current} bytes)",
              ("max", GRAPHENE_NET_MAXIMUM_QUEUED_MESSAGES_IN_BYTES)("current", _total_queued_messages_size));
         try
         {
@@ -346,7 +353,7 @@ namespace graphene { namespace net
         }
         catch (const fc::exception& e)
         {
-          elog("Caught error while closing connection: ${exception}", ("exception", e));
+          wlog("Caught error while closing connection: ${exception}", ("exception", e));
         }
         return;
       }
@@ -438,16 +445,22 @@ namespace graphene { namespace net
       _remote_endpoint = new_remote_endpoint;
     }
 
-    bool peer_connection::busy()
+    bool peer_connection::busy() const
     {
       VERIFY_CORRECT_THREAD();
       return !items_requested_from_peer.empty() || !sync_items_requested_from_peer.empty() || item_ids_requested_from_peer;
     }
 
-    bool peer_connection::idle()
+    bool peer_connection::idle() const
     {
       VERIFY_CORRECT_THREAD();
       return !busy();
+    }
+
+    bool peer_connection::is_currently_handling_message() const
+    {
+      VERIFY_CORRECT_THREAD();
+      return _currently_handling_message;
     }
 
     bool peer_connection::is_transaction_fetching_inhibited() const

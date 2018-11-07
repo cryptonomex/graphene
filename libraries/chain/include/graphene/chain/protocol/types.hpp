@@ -33,6 +33,9 @@
 #include <fc/safe.hpp>
 #include <fc/container/flat.hpp>
 #include <fc/string.hpp>
+
+#include <graphene/chain/protocol/ext.hpp>
+
 #include <fc/io/raw.hpp>
 #include <fc/uint128.hpp>
 #include <fc/static_variant.hpp>
@@ -45,6 +48,8 @@
 #include <graphene/chain/protocol/address.hpp>
 #include <graphene/db/object_id.hpp>
 #include <graphene/chain/protocol/config.hpp>
+
+#include <boost/rational.hpp>
 
 namespace graphene { namespace chain {
    using namespace graphene::db;
@@ -69,7 +74,6 @@ namespace graphene { namespace chain {
    using                               fc::enum_type;
    using                               fc::optional;
    using                               fc::unsigned_int;
-   using                               fc::signed_int;
    using                               fc::time_point_sec;
    using                               fc::time_point;
    using                               fc::safe;
@@ -83,6 +87,8 @@ namespace graphene { namespace chain {
 
    typedef fc::ecc::private_key        private_key_type;
    typedef fc::sha256 chain_id_type;
+
+   typedef boost::rational< int32_t >   ratio_type;
 
    enum asset_issuer_permission_flags
    {
@@ -155,7 +161,8 @@ namespace graphene { namespace chain {
       impl_budget_record_object_type,
       impl_special_authority_object_type,
       impl_buyback_object_type,
-      impl_fba_accumulator_object_type
+      impl_fba_accumulator_object_type,
+      impl_collateral_bid_object_type
    };
 
    //typedef fc::unsigned_int            object_id_type;
@@ -179,7 +186,7 @@ namespace graphene { namespace chain {
    typedef object_id< protocol_ids, account_object_type,            account_object>               account_id_type;
    typedef object_id< protocol_ids, asset_object_type,              asset_object>                 asset_id_type;
    typedef object_id< protocol_ids, force_settlement_object_type,   force_settlement_object>      force_settlement_id_type;
-   typedef object_id< protocol_ids, committee_member_object_type,           committee_member_object>              committee_member_id_type;
+   typedef object_id< protocol_ids, committee_member_object_type,   committee_member_object>      committee_member_id_type;
    typedef object_id< protocol_ids, witness_object_type,            witness_object>               witness_id_type;
    typedef object_id< protocol_ids, limit_order_object_type,        limit_order_object>           limit_order_id_type;
    typedef object_id< protocol_ids, call_order_object_type,         call_order_object>            call_order_id_type;
@@ -207,6 +214,7 @@ namespace graphene { namespace chain {
    class special_authority_object;
    class buyback_object;
    class fba_accumulator_object;
+   class collateral_bid_object;
 
    typedef object_id< implementation_ids, impl_global_property_object_type,  global_property_object>                    global_property_id_type;
    typedef object_id< implementation_ids, impl_dynamic_global_property_object_type,  dynamic_global_property_object>    dynamic_global_property_id_type;
@@ -227,6 +235,7 @@ namespace graphene { namespace chain {
    typedef object_id< implementation_ids, impl_special_authority_object_type, special_authority_object >                special_authority_id_type;
    typedef object_id< implementation_ids, impl_buyback_object_type, buyback_object >                                    buyback_id_type;
    typedef object_id< implementation_ids, impl_fba_accumulator_object_type, fba_accumulator_object >                    fba_accumulator_id_type;
+   typedef object_id< implementation_ids, impl_collateral_bid_object_type, collateral_bid_object >                      collateral_bid_id_type;
 
    typedef fc::array<char, GRAPHENE_MAX_ASSET_SYMBOL_LENGTH>    symbol_type;
    typedef fc::ripemd160                                        block_id_type;
@@ -256,8 +265,6 @@ namespace graphene { namespace chain {
        friend bool operator == ( const public_key_type& p1, const fc::ecc::public_key& p2);
        friend bool operator == ( const public_key_type& p1, const public_key_type& p2);
        friend bool operator != ( const public_key_type& p1, const public_key_type& p2);
-       // TODO: This is temporary for testing
-       bool is_valid_v1( const std::string& base58str );
    };
 
    struct extended_public_key_type
@@ -307,12 +314,12 @@ namespace graphene { namespace chain {
 
 namespace fc
 {
-    void to_variant( const graphene::chain::public_key_type& var,  fc::variant& vo );
-    void from_variant( const fc::variant& var,  graphene::chain::public_key_type& vo );
-    void to_variant( const graphene::chain::extended_public_key_type& var, fc::variant& vo );
-    void from_variant( const fc::variant& var, graphene::chain::extended_public_key_type& vo );
-    void to_variant( const graphene::chain::extended_private_key_type& var, fc::variant& vo );
-    void from_variant( const fc::variant& var, graphene::chain::extended_private_key_type& vo );
+    void to_variant( const graphene::chain::public_key_type& var,  fc::variant& vo, uint32_t max_depth = 2 );
+    void from_variant( const fc::variant& var,  graphene::chain::public_key_type& vo, uint32_t max_depth = 2 );
+    void to_variant( const graphene::chain::extended_public_key_type& var, fc::variant& vo, uint32_t max_depth = 2 );
+    void from_variant( const fc::variant& var, graphene::chain::extended_public_key_type& vo, uint32_t max_depth = 2 );
+    void to_variant( const graphene::chain::extended_private_key_type& var, fc::variant& vo, uint32_t max_depth = 2 );
+    void from_variant( const fc::variant& var, graphene::chain::extended_private_key_type& vo, uint32_t max_depth = 2 );
 }
 
 FC_REFLECT( graphene::chain::public_key_type, (key_data) )
@@ -359,6 +366,7 @@ FC_REFLECT_ENUM( graphene::chain::impl_object_type,
                  (impl_special_authority_object_type)
                  (impl_buyback_object_type)
                  (impl_fba_accumulator_object_type)
+                 (impl_collateral_bid_object_type)
                )
 
 FC_REFLECT_TYPENAME( graphene::chain::share_type )
@@ -390,6 +398,7 @@ FC_REFLECT_TYPENAME( graphene::chain::budget_record_id_type )
 FC_REFLECT_TYPENAME( graphene::chain::special_authority_id_type )
 FC_REFLECT_TYPENAME( graphene::chain::buyback_id_type )
 FC_REFLECT_TYPENAME( graphene::chain::fba_accumulator_id_type )
+FC_REFLECT_TYPENAME( graphene::chain::collateral_bid_id_type )
 
 FC_REFLECT( graphene::chain::void_t, )
 

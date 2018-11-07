@@ -1,11 +1,11 @@
-# Defines Graphene library target.
-project( Graphene )
+# Defines BitShares library target.
+project( BitShares )
 cmake_minimum_required( VERSION 2.8.12 )
 
-set( BLOCKCHAIN_NAME "Graphene" )
+set( BLOCKCHAIN_NAME "BitShares" )
 
 set( CLI_CLIENT_EXECUTABLE_NAME graphene_client )
-set( GUI_CLIENT_EXECUTABLE_NAME Graphene )
+set( GUI_CLIENT_EXECUTABLE_NAME BitShares )
 set( CUSTOM_URL_SCHEME "gcs" )
 set( INSTALLER_APP_ID "68ad7005-8eee-49c9-95ce-9eed97e5b347" )
 
@@ -23,6 +23,7 @@ endif()
 list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules" )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS "ON")
+set(GRAPHENE_EGENESIS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/genesis.json" )
 
 #set (ENABLE_INSTALLER 1)
 #set (USE_PCH 1)
@@ -31,16 +32,19 @@ if (USE_PCH)
   include (cotire)
 endif(USE_PCH)
 
-list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libraries/fc/CMakeModules" )
+IF( NOT WIN32 )
+  list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libraries/fc/CMakeModules" )
+ENDIF( NOT WIN32 )
 list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libraries/fc/GitVersionGen" )
 include( GetGitRevisionDescription )
 get_git_head_revision( GIT_REFSPEC GIT_SHA2 )
 
 SET(BOOST_COMPONENTS)
 LIST(APPEND BOOST_COMPONENTS thread
+                             iostreams
                              date_time
-                             system
                              filesystem
+                             system
                              program_options
                              signals
                              serialization
@@ -67,7 +71,7 @@ ENDIF()
 
 if( WIN32 )
 
-    message( STATUS "Configuring Graphene on WIN32")
+    message( STATUS "Configuring BitShares on WIN32")
     set( DB_VERSION 60 )
     set( BDB_STATIC_LIBS 1 )
 
@@ -100,19 +104,13 @@ if( WIN32 )
 
 else( WIN32 ) # Apple AND Linux
 
-    find_library(READLINE_LIBRARIES NAMES readline)
-    find_path(READLINE_INCLUDE_DIR readline/readline.h)
-    #if(NOT READLINE_INCLUDE_DIR OR NOT READLINE_LIBRARIES)
-    #  MESSAGE(FATAL_ERROR "Could not find lib readline.")
-    #endif()
-
     if( APPLE )
         # Apple Specific Options Here
-        message( STATUS "Configuring Graphene on OS X" )
+        message( STATUS "Configuring BitShares on OS X" )
         set( CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11 -stdlib=libc++ -Wall" )
     else( APPLE )
         # Linux Specific Options Here
-        message( STATUS "Configuring Graphene on Linux" )
+        message( STATUS "Configuring BitShares on Linux" )
         set( CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11 -Wall" )
         set( rt_library rt )
         set( pthread_library pthread)
@@ -128,6 +126,10 @@ else( WIN32 ) # Apple AND Linux
 
     if( "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" )
         set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp" )
+    elseif( "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" )
+        if( CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 4.0.0 OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.0.0 )
+            set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-invalid-partial-specialization" )
+        endif()
     endif()
 
     if( "${CMAKE_GENERATOR}" STREQUAL "Ninja" )
@@ -142,9 +144,7 @@ else( WIN32 ) # Apple AND Linux
 
 endif( WIN32 )
 
-find_package( BerkeleyDB )
-
-set(ENABLE_COVERAGE_TESTING FALSE CACHE BOOL "Build Graphene for code coverage analysis")
+set(ENABLE_COVERAGE_TESTING FALSE CACHE BOOL "Build BitShares for code coverage analysis")
 
 if(ENABLE_COVERAGE_TESTING)
     SET(CMAKE_CXX_FLAGS "--coverage ${CMAKE_CXX_FLAGS}")
@@ -174,18 +174,18 @@ set(CPACK_PACKAGE_VERSION_MAJOR "${VERSION_MAJOR}")
 set(CPACK_PACKAGE_VERSION_MINOR "${VERSION_MINOR}")
 set(CPACK_PACKAGE_VERSION_PATCH "${VERSION_PATCH}")
 set(CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
-set(CPACK_PACKAGE_DESCRIPTION "A client for the Graphene network")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A client for the Graphene network")
+set(CPACK_PACKAGE_DESCRIPTION "A client for the BitShares network")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A client for the BitShares network")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
-set(CPACK_PACKAGE_INSTALL_DIRECTORY "Graphene ${CPACK_PACKAGE_VERSION}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "BitShares ${CPACK_PACKAGE_VERSION}")
 
 if(WIN32)
  SET(CPACK_GENERATOR "ZIP;NSIS")
- set(CPACK_PACKAGE_NAME "Graphene") # override above
+ set(CPACK_PACKAGE_NAME "BitShares") # override above
  set(CPACK_NSIS_EXECUTABLES_DIRECTORY .)
- set(CPACK_NSIS_PACKAGE_NAME "Graphene v${CPACK_PACKAGE_VERSION}")
+ set(CPACK_NSIS_PACKAGE_NAME "BitShares v${CPACK_PACKAGE_VERSION}")
  set(CPACK_NSIS_DISPLAY_NAME "${CPACK_NSIS_PACKAGE_NAME}")
- set(CPACK_NSIS_DEFINES "  !define MUI_STARTMENUPAGE_DEFAULTFOLDER \\\"Graphene\\\"")
+ set(CPACK_NSIS_DEFINES "  !define MUI_STARTMENUPAGE_DEFAULTFOLDER \\\"BitShares\\\"")
  # it seems like windows zip files usually don't have a single directory inside them, unix tgz frequently do
  SET(CPACK_INCLUDE_TOPLEVEL_DIRECTORY 0)
 

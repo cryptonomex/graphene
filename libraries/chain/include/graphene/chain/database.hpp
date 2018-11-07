@@ -89,10 +89,12 @@ namespace graphene { namespace chain {
           *
           * @param data_dir Path to open or create database in
           * @param genesis_loader A callable object which returns the genesis state to initialize new databases on
+          * @param db_version a version string that changes when the internal database format and/or logic is modified
           */
           void open(
              const fc::path& data_dir,
-             std::function<genesis_state_type()> genesis_loader );
+             std::function<genesis_state_type()> genesis_loader,
+             const std::string& db_version );
 
          /**
           * @brief Rebuild object graph from block history and open detabase
@@ -100,7 +102,7 @@ namespace graphene { namespace chain {
           * This method may be called after or instead of @ref database::open, and will rebuild the object graph by
           * replaying blockchain history. When this method exits successfully, the database will be open.
           */
-         void reindex(fc::path data_dir, const genesis_state_type& initial_allocation = genesis_state_type());
+         void reindex(fc::path data_dir);
 
          /**
           * @brief wipe Delete database from disk, and potentially the raw chain as well.
@@ -193,12 +195,18 @@ namespace graphene { namespace chain {
           *  Emitted After a block has been applied and committed.  The callback
           *  should not yield and should execute quickly.
           */
-         fc::signal<void(const vector<object_id_type>&)> changed_objects;
+         fc::signal<void(const vector<object_id_type>&, const flat_set<account_id_type>&)> new_objects;
+
+         /**
+          *  Emitted After a block has been applied and committed.  The callback
+          *  should not yield and should execute quickly.
+          */
+         fc::signal<void(const vector<object_id_type>&, const flat_set<account_id_type>&)> changed_objects;
 
          /** this signal is emitted any time an object is removed and contains a
           * pointer to the last value of every object that was removed.
           */
-         fc::signal<void(const vector<const object*>&)>  removed_objects;
+         fc::signal<void(const vector<object_id_type>&, const vector<const object*>&, const flat_set<account_id_type>&)>  removed_objects;
 
          //////////////////// db_witness_schedule.cpp ////////////////////
 
@@ -249,6 +257,7 @@ namespace graphene { namespace chain {
          const dynamic_global_property_object&  get_dynamic_global_properties()const;
          const node_property_object&            get_node_properties()const;
          const fee_schedule&                    current_fee_schedule()const;
+         const account_statistics_object&       get_account_stats_by_owner( account_id_type owner )const;
 
          time_point_sec   head_block_time()const;
          uint32_t         head_block_num()const;
@@ -329,8 +338,11 @@ namespace graphene { namespace chain {
 
          /// @{ @group Market Helpers
          void globally_settle_asset( const asset_object& bitasset, const price& settle_price );
-         void cancel_order(const force_settlement_object& order, bool create_virtual_op = true);
-         void cancel_order(const limit_order_object& order, bool create_virtual_op = true);
+         void cancel_settle_order(const force_settlement_object& order, bool create_virtual_op = true);
+         void cancel_limit_order(const limit_order_object& order, bool create_virtual_op = true, bool skip_cancel_fee = false);
+         void revive_bitasset( const asset_object& bitasset );
+         void cancel_bid(const collateral_bid_object& bid, bool create_virtual_op = true);
+         void execute_bid( const collateral_bid_object& bid, share_type debt_covered, share_type collateral_from_fund, const price_feed& current_feed );
 
          /**
           * @brief Process a new limit order through the markets
@@ -340,37 +352,42 @@ namespace graphene { namespace chain {
           * This function takes a new limit order, and runs the markets attempting to match it with existing orders
           * already on the books.
           */
+         bool apply_order_before_hardfork_625(const limit_order_object& new_order_object, bool allow_black_swan = true);
          bool apply_order(const limit_order_object& new_order_object, bool allow_black_swan = true);
 
          /**
-          * Matches the two orders,
+          * Matches the two orders, the first parameter is taker, the second is maker.
           *
           * @return a bit field indicating which orders were filled (and thus removed)
           *
           * 0 - no orders were matched
-          * 1 - bid was filled
-          * 2 - ask was filled
+          * 1 - taker was filled
+          * 2 - maker was filled
           * 3 - both were filled
           */
          ///@{
-         template<typename OrderType>
-         int match( const limit_order_object& bid, const OrderType& ask, const price& match_price );
-         int match( const limit_order_object& bid, const limit_order_object& ask, const price& trade_price );
+         int match( const limit_order_object& taker, const limit_order_object& maker, const price& trade_price );
+         int match( const limit_order_object& taker, const call_order_object& maker, const price& trade_price,
+                    const price& feed_price, const uint16_t maintenance_collateral_ratio );
          /// @return the amount of asset settled
          asset match(const call_order_object& call,
                    const force_settlement_object& settle,
                    const price& match_price,
-                   asset max_settlement);
+                   asset max_settlement,
+                   const price& fill_price);
          ///@}
 
          /**
           * @return true if the order was completely filled and thus freed.
           */
-         bool fill_order( const limit_order_object& order, const asset& pays, const asset& receives, bool cull_if_small );
-         bool fill_order( const call_order_object& order, const asset& pays, const asset& receives );
-         bool fill_order( const force_settlement_object& settle, const asset& pays, const asset& receives );
+         bool fill_limit_order( const limit_order_object& order, const asset& pays, const asset& receives, bool cull_if_small,
+                                const price& fill_price, const bool is_maker );
+         bool fill_call_order( const call_order_object& order, const asset& pays, const asset& receives,
+                               const price& fill_price, const bool is_maker );
+         bool fill_settle_order( const force_settlement_object& settle, const asset& pays, const asset& receives,
+                                 const price& fill_price, const bool is_maker );
 
-         bool check_call_orders( const asset_object& mia, bool enable_black_swan = true );
+         bool check_call_orders( const asset_object& mia, bool enable_black_swan = true, bool for_new_limit_order = false );
 
          // helpers to fill_order
          void pay_order( const account_object& receiver, const asset& receives, const asset& pays );
@@ -397,6 +414,8 @@ namespace graphene { namespace chain {
    protected:
          //Mark pop_undo() as protected -- we do not want outside calling pop_undo(); it should call pop_block() instead
          void pop_undo() { object_database::pop_undo(); }
+         void notify_applied_block( const signed_block& block );
+         void notify_on_pending_transaction( const signed_transaction& tx );
          void notify_changed_objects();
 
       private:
@@ -416,6 +435,7 @@ namespace graphene { namespace chain {
       private:
          void                  _apply_block( const signed_block& next_block );
          processed_transaction _apply_transaction( const signed_transaction& trx );
+         void                  _cancel_bids_and_revive_mpa( const asset_object& bitasset, const asset_bitasset_data_object& bad );
 
          ///Steps involved in applying a new block
          ///@{
@@ -424,8 +444,12 @@ namespace graphene { namespace chain {
          const witness_object& _validate_block_header( const signed_block& next_block )const;
          void create_block_summary(const signed_block& next_block);
 
+         //////////////////// db_witness_schedule.cpp ////////////////////
+
+         uint32_t update_witness_missed_blocks( const signed_block& b );
+
          //////////////////// db_update.cpp ////////////////////
-         void update_global_dynamic_data( const signed_block& b );
+         void update_global_dynamic_data( const signed_block& b, const uint32_t missed_blocks );
          void update_signing_witness(const witness_object& signing_witness, const signed_block& new_block);
          void update_last_irreversible_block();
          void clear_expired_transactions();
@@ -448,9 +472,11 @@ namespace graphene { namespace chain {
          void update_active_witnesses();
          void update_active_committee_members();
          void update_worker_votes();
+         void process_bids( const asset_bitasset_data_object& bad );
+         void process_bitassets();
 
-         template<class... Types>
-         void perform_account_maintenance(std::tuple<Types...> helpers);
+         template<class Type>
+         void perform_account_maintenance( Type tally_helper );
          ///@}
          ///@}
 
@@ -489,6 +515,15 @@ namespace graphene { namespace chain {
          flat_map<uint32_t,block_id_type>  _checkpoints;
 
          node_property_object              _node_property_object;
+
+         /**
+          * Whether database is successfully opened or not.
+          *
+          * The database is considered open when there's no exception
+          * or assertion fail during database::open() method, and
+          * database::close() has not been called, or failed during execution.
+          */
+         bool                              _opened = false;
    };
 
    namespace detail
