@@ -430,7 +430,7 @@ BOOST_AUTO_TEST_CASE( cli_confidential_tx_test )
 
       // ** Block 2: Nathan will blind 100M BTS:
       BOOST_TEST_MESSAGE("Blinding a large balance");
-      W.transfer_to_blind("nathan", "BTS", {{"nathan","100000000"}}, true);
+      W.transfer_to_blind("nathan", GRAPHENE_SYMBOL, {{"nathan","100000000"}}, true);
       BOOST_CHECK( W.get_blind_balances("nathan")[0].amount == 10000000000000 );
       generate_block(app1); head_block++;
 
