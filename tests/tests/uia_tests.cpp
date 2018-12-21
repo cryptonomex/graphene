@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Cryptonomex, Inc., and contributors.
+ * Copyright (c) 2015-2018 Cryptonomex, Inc., and contributors.
  *
  * The MIT License
  *
@@ -34,6 +34,8 @@
 
 #include <fc/crypto/digest.hpp>
 
+#include <locale>
+
 #include "../common/database_fixture.hpp"
 
 using namespace graphene::chain;
@@ -54,7 +56,7 @@ BOOST_AUTO_TEST_CASE( create_advanced_uia )
       creator.common_options.market_fee_percent = GRAPHENE_MAX_MARKET_FEE_PERCENT/100; /*1%*/
       creator.common_options.issuer_permissions = charge_market_fee|white_list|override_authority|transfer_restricted|disable_confidential;
       creator.common_options.flags = charge_market_fee|white_list|override_authority|disable_confidential;
-      creator.common_options.core_exchange_rate = price({asset(2),asset(1,asset_id_type(1))});
+      creator.common_options.core_exchange_rate = price(asset(2),asset(1,asset_id_type(1)));
       creator.common_options.whitelist_authorities = creator.common_options.blacklist_authorities = {account_id_type()};
       trx.operations.push_back(std::move(creator));
       PUSH_TX( db, trx, ~0 );
@@ -99,7 +101,7 @@ BOOST_AUTO_TEST_CASE( override_transfer_test )
    sign( trx,  dan_private_key  );
    GRAPHENE_REQUIRE_THROW( PUSH_TX( db, trx, 0 ), tx_missing_active_auth );
    BOOST_TEST_MESSAGE( "Pass with issuer's signature" );
-   trx.signatures.clear();
+   trx.clear_signatures();
    sign( trx,  sam_private_key  );
    PUSH_TX( db, trx, 0 );
 
@@ -128,7 +130,7 @@ BOOST_AUTO_TEST_CASE( override_transfer_test2 )
    sign( trx,  dan_private_key  );
    GRAPHENE_REQUIRE_THROW( PUSH_TX( db, trx, 0 ), fc::exception);
    BOOST_TEST_MESSAGE( "Fail because overide_authority flag is not set" );
-   trx.signatures.clear();
+   trx.clear_signatures();
    sign( trx,  sam_private_key  );
    GRAPHENE_REQUIRE_THROW( PUSH_TX( db, trx, 0 ), fc::exception );
 
@@ -426,11 +428,78 @@ BOOST_AUTO_TEST_CASE( transfer_restricted_test )
    }
 }
 
+/***
+ * Test to see if a asset name is valid
+ * @param db the database
+ * @param acct the account that will attempt to create the asset
+ * @param asset_name the asset_name
+ * @param allowed whether the creation should be successful
+ * @returns true if meets expectations
+ */
+bool test_asset_name(graphene::chain::database_fixture* db, const graphene::chain::account_object& acct, std::string asset_name, bool allowed)
+{
+   if (allowed)
+   {
+      try
+      {
+         db->create_user_issued_asset(asset_name, acct, 0);
+      } catch (...)
+      {
+         return false;
+      }
+   }
+   else
+   {
+      try
+      {
+         db->create_user_issued_asset(asset_name, acct, 0);
+         return false;
+      } catch (fc::exception& ex) 
+      {
+         return true;
+      } catch (...)
+      {
+         return false;
+      }
+   }
+   return true;
+}
+
+/***
+ * Test to see if an ascii character can be used in an asset name
+ * @param c the ascii character (NOTE: includes extended ascii up to 255)
+ * @param allowed_beginning true if it should be allowed as the first character of an asset name
+ * @param allowed_middle true if it should be allowed in the middle of an asset name
+ * @param allowed_end true if it should be allowed at the end of an asset name
+ * @returns true if tests met expectations
+ */
+bool test_asset_char(graphene::chain::database_fixture* db, const graphene::chain::account_object& acct, const unsigned char& c, bool allowed_beginning, bool allowed_middle, bool allowed_end)
+{
+   std::ostringstream asset_name;
+   // beginning
+   asset_name << c << "CHARLIE";
+   if (!test_asset_name(db, acct, asset_name.str(), allowed_beginning))
+      return false;
+
+   // middle
+   asset_name.str("");
+   asset_name.clear();
+   asset_name << "CHAR" << c << "LIE";
+   if (!test_asset_name(db, acct, asset_name.str(), allowed_middle))
+      return false;
+
+   // end
+   asset_name.str("");
+   asset_name.clear();
+   asset_name << "CHARLIE" << c;
+   return test_asset_name(db, acct, asset_name.str(), allowed_end);
+}
+
 BOOST_AUTO_TEST_CASE( asset_name_test )
 {
    try
    {
-      ACTORS( (alice)(bob) );
+      ACTORS( (alice)(bob)(sam) );
 
       auto has_asset = [&]( std::string symbol ) -> bool
       {
@@ -449,23 +518,78 @@ BOOST_AUTO_TEST_CASE( asset_name_test )
       GRAPHENE_REQUIRE_THROW( create_user_issued_asset( "ALPHA", alice_id(db), 0 ), fc::exception );
       BOOST_CHECK(  has_asset("ALPHA") );    BOOST_CHECK( !has_asset("ALPHA.ONE") );
 
+      generate_blocks( HARDFORK_385_TIME );
+      generate_block();
+
       // Bob can't create ALPHA.ONE
       GRAPHENE_REQUIRE_THROW( create_user_issued_asset( "ALPHA.ONE", bob_id(db), 0 ), fc::exception );
       BOOST_CHECK(  has_asset("ALPHA") );    BOOST_CHECK( !has_asset("ALPHA.ONE") );
-      if( db.head_block_time() <= HARDFORK_409_TIME )
-      {
-         // Alice can't create ALPHA.ONE before hardfork
-         GRAPHENE_REQUIRE_THROW( create_user_issued_asset( "ALPHA.ONE", alice_id(db), 0 ), fc::exception );
-         BOOST_CHECK(  has_asset("ALPHA") );    BOOST_CHECK( !has_asset("ALPHA.ONE") );
-         generate_blocks( HARDFORK_409_TIME );
-         generate_block();
-         // Bob can't create ALPHA.ONE after hardfork
-         GRAPHENE_REQUIRE_THROW( create_user_issued_asset( "ALPHA.ONE", bob_id(db), 0 ), fc::exception );
-         BOOST_CHECK(  has_asset("ALPHA") );    BOOST_CHECK( !has_asset("ALPHA.ONE") );
-      }
-      // Alice can create it
+
+      // Alice can create ALPHA.ONE
       create_user_issued_asset( "ALPHA.ONE", alice_id(db), 0 );
       BOOST_CHECK(  has_asset("ALPHA") );    BOOST_CHECK( has_asset("ALPHA.ONE") );
+
+      // Sam tries to create asset ending in a number but fails before hf_620
+      GRAPHENE_REQUIRE_THROW( create_user_issued_asset( "SP500", sam_id(db), 0 ), fc::assert_exception );
+      BOOST_CHECK(  !has_asset("SP500") );
+
+      // create a proposal to create asset ending in a number, this will fail before hf_620
+      auto& core = asset_id_type()(db);
+      asset_create_operation op_p;
+      op_p.issuer = alice_id;
+      op_p.symbol = "SP500";
+      op_p.common_options.core_exchange_rate = asset( 1 ) / asset( 1, asset_id_type( 1 ) );
+      op_p.fee = core.amount(0);
+
+      const auto& curfees = *db.get_global_properties().parameters.current_fees;
+      const auto& proposal_create_fees = curfees.get<proposal_create_operation>();
+      proposal_create_operation prop;
+      prop.fee_paying_account = alice_id;
+      prop.proposed_ops.emplace_back( op_p );
+      prop.expiration_time =  db.head_block_time() + fc::days(1);
+      prop.fee = asset( proposal_create_fees.fee + proposal_create_fees.price_per_kbyte );
+
+      signed_transaction tx;
+      tx.operations.push_back( prop );
+      db.current_fee_schedule().set_fee( tx.operations.back() );
+      set_expiration( db, tx );
+      sign( tx, alice_private_key );
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, tx ), fc::assert_exception);
+
+      generate_blocks( HARDFORK_CORE_620_TIME + 1);
+      generate_block();
+
+      // Sam can create asset ending in number after hf_620
+      create_user_issued_asset( "NIKKEI225", sam_id(db), 0 );
+      BOOST_CHECK(  has_asset("NIKKEI225") );
+
+      // make sure other assets can still be created after hf_620
+      create_user_issued_asset( "ALPHA2", alice_id(db), 0 );
+      create_user_issued_asset( "ALPHA2.ONE", alice_id(db), 0 );
+      BOOST_CHECK(  has_asset("ALPHA2") );
+      BOOST_CHECK( has_asset("ALPHA2.ONE") );
+
+      // proposal to create asset ending in number will now be created successfully as we are in > hf_620 time
+      prop.expiration_time =  db.head_block_time() + fc::days(3);
+      signed_transaction tx_hf620;
+      tx_hf620.operations.push_back( prop );
+      db.current_fee_schedule().set_fee( tx_hf620.operations.back() );
+      set_expiration( db, tx_hf620 );
+      sign( tx_hf620, alice_private_key );
+      PUSH_TX( db, tx_hf620 );
+
+      // assets with invalid characters should not be allowed
+      unsigned char c = 0;
+      do
+      {
+         if ( (c >= 48 && c <= 57) ) // numbers
+            BOOST_CHECK_MESSAGE( test_asset_char(this, alice_id(db), c, false, true, true), "Failed on good ASCII value " + std::to_string(c) );
+         else if ( c >= 65 && c <= 90) // letters
+            BOOST_CHECK_MESSAGE( test_asset_char(this, alice_id(db), c, true, true, true), "Failed on good ASCII value " + std::to_string(c) );
+         else                       // everything else
+            BOOST_CHECK_MESSAGE( test_asset_char(this, alice_id(db), c, false, false, false), "Failed on bad ASCII value " + std::to_string(c) );
+         c++;
+      } while (c != 0);
    }
    catch(fc::exception& e)
    {

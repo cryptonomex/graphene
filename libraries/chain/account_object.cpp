@@ -46,6 +46,8 @@ void account_balance_object::adjust_balance(const asset& delta)
 {
    assert(delta.asset_id == asset_type);
    balance += delta.amount;
+   if( asset_type == asset_id_type() ) // CORE asset
+      maintenance_flag = true;
 }
 
 void account_statistics_object::process_fees(const account_object& a, database& d) const
@@ -57,8 +59,8 @@ void account_statistics_object::process_fees(const account_object& a, database& 
          // Check the referrer -- if he's no longer a member, pay to the lifetime referrer instead.
          // No need to check the registrar; registrars are required to be lifetime members.
          if( account.referrer(d).is_basic_account(d.head_block_time()) )
-            d.modify(account, [](account_object& a) {
-               a.referrer = a.lifetime_referrer;
+            d.modify( account, [](account_object& acc) {
+               acc.referrer = acc.lifetime_referrer;
             });
 
          share_type network_cut = cut_fee(core_fee_total, account.network_fee_percentage);
@@ -74,8 +76,8 @@ void account_statistics_object::process_fees(const account_object& a, database& 
          share_type lifetime_cut = cut_fee(core_fee_total, account.lifetime_referrer_fee_percentage);
          share_type referral = core_fee_total - network_cut - lifetime_cut;
 
-         d.modify(asset_dynamic_data_id_type()(d), [network_cut](asset_dynamic_data_object& d) {
-            d.accumulated_fees += network_cut;
+         d.modify( d.get_core_dynamic_data(), [network_cut](asset_dynamic_data_object& addo) {
+            addo.accumulated_fees += network_cut;
          });
 
          // Potential optimization: Skip some of this math and object lookups by special casing on the account type.
@@ -119,9 +121,9 @@ set<account_id_type> account_member_index::get_account_members(const account_obj
       result.insert(auth.first);
    return result;
 }
-set<public_key_type> account_member_index::get_key_members(const account_object& a)const
+set<public_key_type, account_member_index::key_compare> account_member_index::get_key_members(const account_object& a)const
 {
-   set<public_key_type> result;
+   set<public_key_type, key_compare> result;
    for( auto auth : a.owner.key_auths )
       result.insert(auth.first);
    for( auto auth : a.active.key_auths )
@@ -213,7 +215,7 @@ void account_member_index::object_modified(const object& after)
 
 
     {
-       set<public_key_type> after_key_members = get_key_members(a);
+       set<public_key_type, key_compare> after_key_members = get_key_members(a);
 
        vector<public_key_type> removed; removed.reserve(before_key_members.size());
        std::set_difference(before_key_members.begin(), before_key_members.end(),

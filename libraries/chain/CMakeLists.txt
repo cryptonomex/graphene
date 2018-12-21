@@ -6,6 +6,7 @@ set_source_files_properties( "${CMAKE_CURRENT_BINARY_DIR}/include/graphene/chain
 add_dependencies( build_hardfork_hpp cat-parts )
 
 file(GLOB HEADERS "include/graphene/chain/*.hpp")
+file(GLOB PROTOCOL_HEADERS "include/graphene/chain/protocol/*.hpp")
 
 if( GRAPHENE_DISABLE_UNITY_BUILD )
    set( GRAPHENE_DB_FILES
@@ -19,6 +20,7 @@ if( GRAPHENE_DISABLE_UNITY_BUILD )
         db_market.cpp
         db_update.cpp
         db_witness_schedule.cpp
+        db_notify.cpp
       )
    message( STATUS "Graphene database unity build disabled" )
 else( GRAPHENE_DISABLE_UNITY_BUILD )
@@ -82,6 +84,7 @@ add_library( graphene_chain
              account_object.cpp
              asset_object.cpp
              fba_object.cpp
+             market_object.cpp
              proposal_object.cpp
              vesting_balance_object.cpp
 
@@ -90,6 +93,7 @@ add_library( graphene_chain
              is_authorized_asset.cpp
 
              ${HEADERS}
+             ${PROTOCOL_HEADERS}
              "${CMAKE_CURRENT_BINARY_DIR}/include/graphene/chain/hardfork.hpp"
            )
 
@@ -109,3 +113,5 @@ INSTALL( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+INSTALL( FILES ${HEADERS} DESTINATION "include/graphene/chain" )
+INSTALL( FILES ${PROTOCOL_HEADERS} DESTINATION "include/graphene/chain/protocol" )
