@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include <graphene/chain/protocol/protocol.hpp>
+#include <graphene/chain/protocol/block.hpp>
 #include <graphene/chain/protocol/fee_schedule.hpp>
 
 #include <graphene/chain/account_object.hpp>
@@ -37,7 +37,6 @@
 #include <graphene/chain/witness_object.hpp>
 #include <graphene/chain/worker_object.hpp>
 
-#include <fc/smart_ref_impl.hpp>
 #include <iostream>
 
 using namespace graphene::chain;
@@ -110,7 +109,6 @@ struct js_name<fc::array<T,N>>
 template<size_t N>   struct js_name<fc::array<char,N>>    { static std::string name(){ return  "bytes "+ fc::to_string(N); }; };
 template<size_t N>   struct js_name<fc::array<uint8_t,N>> { static std::string name(){ return  "bytes "+ fc::to_string(N); }; };
 template<typename T> struct js_name< fc::optional<T> >    { static std::string name(){ return "optional " + js_name<T>::name(); } };
-template<typename T> struct js_name< fc::smart_ref<T> >   { static std::string name(){ return js_name<T>::name(); } };
 template<>           struct js_name< object_id_type >     { static std::string name(){ return "object_id_type"; } };
 template<typename T> struct js_name< fc::flat_set<T> >    { static std::string name(){ return "set " + js_name<T>::name(); } };
 template<typename T> struct js_name< std::vector<T> >     { static std::string name(){ return "array " + js_name<T>::name(); } };
@@ -121,7 +119,7 @@ template<> struct js_name< std::vector<char> > { static std::string name(){ retu
 template<> struct js_name<fc::uint160>         { static std::string name(){ return "bytes 20";   } };
 template<> struct js_name<fc::sha224>          { static std::string name(){ return "bytes 28";   } };
 template<> struct js_name<fc::sha256>          { static std::string name(){ return "bytes 32";   } };
-template<> struct js_name<fc::unsigned_int>    { static std::string name(){ return "varuint32";  } };
+template<> struct js_name<fc::unsigned_int>    { static std::string name(){ return "varuint64";  } };
 template<> struct js_name< vote_id_type >      { static std::string name(){ return "vote_id";    } };
 template<> struct js_name< time_point_sec >    { static std::string name(){ return "time_point_sec"; } };
 
@@ -234,14 +232,6 @@ template<typename T>
 struct serializer<std::vector<T>,false>
 {
    static void init() { serializer<T>::init(); }
-   static void generate() {}
-};
-
-template<typename T>
-struct serializer<fc::smart_ref<T>,false>
-{
-   static void init() { 
-      serializer<T>::init(); }
    static void generate() {}
 };
 

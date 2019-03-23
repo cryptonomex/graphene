@@ -118,9 +118,18 @@ namespace graphene { namespace chain {
 
       /**
        *  Finds the appropriate fee parameter struct for the operation
-       *  and then calculates the appropriate fee.
+       *  and then calculates the appropriate fee in CORE asset.
        */
-      asset calculate_fee( const operation& op, const price& core_exchange_rate = price::unit_price() )const;
+      asset calculate_fee( const operation& op )const;
+      /**
+       *  Finds the appropriate fee parameter struct for the operation
+       *  and then calculates the appropriate fee in an asset specified
+       *  implicitly by core_exchange_rate.
+       */
+      asset calculate_fee( const operation& op, const price& core_exchange_rate )const;
+      /**
+       *  Updates the operation with appropriate fee and returns the fee.
+       */
       asset set_fee( operation& op, const price& core_exchange_rate = price::unit_price() )const;
 
       void zero_all_fees();
@@ -146,11 +155,17 @@ namespace graphene { namespace chain {
        */
       flat_set<fee_parameters> parameters;
       uint32_t                 scale = GRAPHENE_100_PERCENT; ///< fee * scale / GRAPHENE_100_PERCENT
+      private:
+      static void set_fee_parameters(fee_schedule& sched);
    };
 
    typedef fee_schedule fee_schedule_type;
 
 } } // graphene::chain
+
+namespace fc {
+  template<> struct get_typename<std::shared_ptr<graphene::chain::fee_schedule>> { static const char* name() { return "shared_ptr<fee_schedule>"; } };
+}
 
 FC_REFLECT_TYPENAME( graphene::chain::fee_parameters )
 FC_REFLECT( graphene::chain::fee_schedule, (parameters)(scale) )

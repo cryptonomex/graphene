@@ -23,25 +23,10 @@
  */
 #include <algorithm>
 #include <graphene/chain/protocol/fee_schedule.hpp>
-#include <fc/smart_ref_impl.hpp>
-
-namespace fc
-{
-   // explicitly instantiate the smart_ref, gcc fails to instantiate it in some release builds
-   //template graphene::chain::fee_schedule& smart_ref<graphene::chain::fee_schedule>::operator=(smart_ref<graphene::chain::fee_schedule>&&);
-   //template graphene::chain::fee_schedule& smart_ref<graphene::chain::fee_schedule>::operator=(U&&);
-   //template graphene::chain::fee_schedule& smart_ref<graphene::chain::fee_schedule>::operator=(const smart_ref&);
-   //template smart_ref<graphene::chain::fee_schedule>::smart_ref();
-   //template const graphene::chain::fee_schedule& smart_ref<graphene::chain::fee_schedule>::operator*() const;
-}
 
 #define MAX_FEE_STABILIZATION_ITERATION 4
 
 namespace graphene { namespace chain {
-
-   typedef fc::smart_ref<fee_schedule> smart_fee_schedule;
-
-   static smart_fee_schedule tmp;
 
    fee_schedule::fee_schedule()
    {
@@ -88,7 +73,7 @@ namespace graphene { namespace chain {
       {
          try {
             return op.calculate_fee( param.get<OpType>() ).value;
-         } catch (fc::assert_exception e) {
+         } catch (fc::assert_exception& e) {
              fee_parameters params; params.set_which(current_op);
              auto itr = param.parameters.find(params);
              if( itr != param.parameters.end() ) params = *itr;
@@ -130,21 +115,23 @@ namespace graphene { namespace chain {
       this->scale = 0;
    }
 
+   asset fee_schedule::calculate_fee( const operation& op )const
+   {
+      uint64_t required_fee = op.visit( calc_fee_visitor( *this, op ) );
+      if( scale != GRAPHENE_100_PERCENT )
+      {
+         auto scaled = fc::uint128(required_fee) * scale;
+         scaled /= GRAPHENE_100_PERCENT;
+         FC_ASSERT( scaled <= GRAPHENE_MAX_SHARE_SUPPLY,
+                    "Required fee after scaling would exceed maximum possible supply" );
+         required_fee = scaled.to_uint64();
+      }
+      return asset( required_fee );
+   }
+
    asset fee_schedule::calculate_fee( const operation& op, const price& core_exchange_rate )const
    {
-      auto base_value = op.visit( calc_fee_visitor( *this, op ) );
-      auto scaled = fc::uint128(base_value) * scale;
-      scaled /= GRAPHENE_100_PERCENT;
-      FC_ASSERT( scaled <= GRAPHENE_MAX_SHARE_SUPPLY );
-      //idump( (base_value)(scaled)(core_exchange_rate) );
-      auto result = asset( scaled.to_uint64(), asset_id_type(0) ) * core_exchange_rate;
-      //FC_ASSERT( result * core_exchange_rate >= asset( scaled.to_uint64()) );
-
-      while( result * core_exchange_rate < asset( scaled.to_uint64()) )
-        result.amount++;
-
-      FC_ASSERT( result.amount <= GRAPHENE_MAX_SHARE_SUPPLY );
-      return result;
+      return calculate_fee( op ).multiply_and_round_up( core_exchange_rate );
    }
 
    asset fee_schedule::set_fee( operation& op, const price& core_exchange_rate )const
