@@ -18,7 +18,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#include <graphene/chain/protocol/protocol.hpp>
+#include <graphene/chain/protocol/block.hpp>
 #include <graphene/chain/protocol/fee_schedule.hpp>
 #include <graphene/chain/vesting_balance_object.hpp>
 #include <graphene/chain/withdraw_permission_object.hpp>
@@ -28,7 +28,6 @@
 #include <graphene/chain/account_object.hpp>
 #include <graphene/chain/balance_object.hpp>
 #include <graphene/chain/committee_member_object.hpp>
-#include <fc/smart_ref_impl.hpp>
 #include <iostream>
 
 using namespace graphene::chain;
@@ -37,7 +36,7 @@ namespace graphene { namespace member_enumerator {
 
 struct class_processor
 {
-   class_processor( std::map< std::string, std::vector< std::string > >& r ) : result(r) {}
+   explicit class_processor( std::map< std::string, std::vector< std::string > >& r ) : result(r) {}
 
    template< typename T >
    void process_class( const T* dummy );
@@ -84,7 +83,7 @@ struct member_visitor
 
 struct static_variant_visitor
 {
-   static_variant_visitor( class_processor* p ) : proc(p) {}
+   explicit static_variant_visitor( class_processor* p ) : proc(p) {}
 
    typedef void result_type;
 
@@ -194,13 +193,12 @@ int main( int argc, char** argv )
    {
       std::map< std::string, std::vector< std::string > > result;
       graphene::member_enumerator::class_processor::process_class<signed_block>(result);
-      //graphene::member_enumerator::process_class<transfer_operation>(result);
 
       fc::mutable_variant_object mvo;
       for( const std::pair< std::string, std::vector< std::string > >& e : result )
       {
          variant v;
-         to_variant( e.second, v );
+         to_variant( e.second, v , 1);
          mvo.set( e.first, v );
       }
 

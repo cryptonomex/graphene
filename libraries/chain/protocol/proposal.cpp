@@ -23,7 +23,6 @@
  */
 #include <graphene/chain/protocol/operations.hpp>
 #include <graphene/chain/protocol/fee_schedule.hpp>
-#include <fc/smart_ref_impl.hpp>
 
 namespace graphene { namespace chain {
 
@@ -89,7 +88,8 @@ void proposal_update_operation::get_required_authorities( vector<authority>& o )
       auth.key_auths[k] = 1;
    auth.weight_threshold = auth.key_auths.size();
 
-   o.emplace_back( std::move(auth) );
+   if( auth.weight_threshold > 0 )
+      o.emplace_back( std::move(auth) );
 }
 
 void proposal_update_operation::get_required_active_authorities( flat_set<account_id_type>& a )const

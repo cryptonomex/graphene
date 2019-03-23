@@ -30,6 +30,19 @@ namespace graphene { namespace db {
 void undo_database::enable()  { _disabled = false; }
 void undo_database::disable() { _disabled = true; }
 
+undo_database::session::~session()
+{
+   try {
+      if( _apply_undo ) _db.undo();
+   }
+   catch ( const fc::exception& e )
+   {
+      elog( "${e}", ("e",e.to_detail_string() ) );
+      std::terminate();
+   }
+   if( _disable_on_exit ) _db.disable();
+}
+
 undo_database::session undo_database::start_undo_session( bool force_enable )
 {
    if( _disabled && !force_enable ) return session(*this);
@@ -118,8 +131,6 @@ void undo_database::undo()
       _db.insert( std::move(*item.second) );
 
    _stack.pop_back();
-   if( _stack.empty() )
-      _stack.emplace_back();
    enable();
    --_active_sessions;
 } FC_CAPTURE_AND_RETHROW() }
@@ -127,6 +138,12 @@ void undo_database::undo()
 void undo_database::merge()
 {
    FC_ASSERT( _active_sessions > 0 );
+   if( _active_sessions == 1 && _stack.size() == 1 )
+   {
+      _stack.pop_back();
+      --_active_sessions;
+      return;
+   }
    FC_ASSERT( _stack.size() >=2 );
    auto& state = _stack.back();
    auto& prev_state = _stack[_stack.size()-2];

@@ -29,6 +29,7 @@
 #include <graphene/chain/market_object.hpp>
 #include <graphene/chain/vesting_balance_object.hpp>
 #include <graphene/chain/witness_object.hpp>
+#include <graphene/chain/fba_object.hpp>
 
 namespace graphene { namespace chain {
 
@@ -42,7 +43,9 @@ void database::debug_dump()
    const asset_dynamic_data_object& core_asset_data = db.get_core_asset().dynamic_asset_data_id(db);
 
    const auto& balance_index = db.get_index_type<account_balance_index>().indices();
-   const simple_index<account_statistics_object>& statistics_index = db.get_index_type<simple_index<account_statistics_object>>();
+   const auto& statistics_index = db.get_index_type<account_stats_index>().indices();
+   const auto& bids = db.get_index_type<collateral_bid_index>().indices();
+   const auto& settle_index = db.get_index_type<force_settlement_index>().indices();
    map<asset_id_type,share_type> total_balances;
    map<asset_id_type,share_type> total_debts;
    share_type core_in_orders;
@@ -53,11 +56,21 @@ void database::debug_dump()
     //  idump(("balance")(a));
       total_balances[a.asset_type] += a.balance;
    }
+   for( const force_settlement_object& s : settle_index )
+   {
+      total_balances[s.balance.asset_id] += s.balance.amount;
+   }
+   for( const vesting_balance_object& vbo : db.get_index_type< vesting_balance_index >().indices() )
+      total_balances[ vbo.balance.asset_id ] += vbo.balance.amount;
+   for( const fba_accumulator_object& fba : db.get_index_type< simple_index< fba_accumulator_object > >() )
+      total_balances[ asset_id_type() ] += fba.accumulated_fba_fees;
    for( const account_statistics_object& s : statistics_index )
    {
     //  idump(("statistics")(s));
       reported_core_in_orders += s.total_core_in_orders;
    }
+   for( const collateral_bid_object& b : bids )
+      total_balances[b.inv_swan_price.base.asset_id] += b.inv_swan_price.base.amount;
    for( const limit_order_object& o : db.get_index_type<limit_order_index>().indices() )
    {
  //     idump(("limit_order")(o));
@@ -82,7 +95,9 @@ void database::debug_dump()
 
    if( total_balances[asset_id_type()].value != core_asset_data.current_supply.value )
    {
-      edump( (total_balances[asset_id_type()].value)(core_asset_data.current_supply.value ));
+      FC_THROW( "computed balance of CORE mismatch",
+                ("computed value",total_balances[asset_id_type()].value)
+                ("current supply",core_asset_data.current_supply.value) );
    }
 
 
@@ -143,25 +158,19 @@ void debug_apply_update( database& db, const fc::variant_object& vo )
    switch( action )
    {
       case db_action_create:
-         /*
-         idx.create( [&]( object& obj )
-         {
-            idx.object_from_variant( vo, obj );
-         } );
-         */
          FC_ASSERT( false );
          break;
       case db_action_write:
          db.modify( db.get_object( oid ), [&]( object& obj )
          {
             idx.object_default( obj );
-            idx.object_from_variant( vo, obj );
+            idx.object_from_variant( vo, obj, GRAPHENE_MAX_NESTED_OBJECTS );
          } );
          break;
       case db_action_update:
          db.modify( db.get_object( oid ), [&]( object& obj )
          {
-            idx.object_from_variant( vo, obj );
+            idx.object_from_variant( vo, obj, GRAPHENE_MAX_NESTED_OBJECTS );
          } );
          break;
       case db_action_delete:

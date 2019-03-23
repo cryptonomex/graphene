@@ -30,7 +30,6 @@
 #include <boost/algorithm/string.hpp>
 
 #include <fc/filesystem.hpp>
-#include <fc/smart_ref_impl.hpp>   // required for gcc in release mode
 #include <fc/string.hpp>
 #include <fc/io/fstream.hpp>
 #include <fc/io/json.hpp>
@@ -166,7 +165,7 @@ struct egenesis_info
       else if( genesis_json.valid() )
       {
          // If genesis not exist, generate from genesis_json
-         genesis = fc::json::from_string( *genesis_json ).as< genesis_state_type >();
+         genesis = fc::json::from_string( *genesis_json ).as< genesis_state_type >( 20 );
       }
       else
       {
@@ -215,7 +214,6 @@ void load_genesis(
       std::cerr << "embed_genesis:  Genesis ID from argument is " << chain_id_str << "\n";
       info.chain_id = chain_id_str;
    }
-   return;
 }
 
 int main( int argc, char** argv )

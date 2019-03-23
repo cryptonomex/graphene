@@ -26,6 +26,8 @@
 #include <graphene/chain/protocol/block.hpp>
 
 namespace graphene { namespace chain {
+   struct index_entry;
+
    class block_database 
    {
       public:
@@ -43,7 +45,11 @@ namespace graphene { namespace chain {
          optional<signed_block> fetch_by_number( uint32_t block_num )const;
          optional<signed_block> last()const;
          optional<block_id_type> last_id()const;
+         size_t                 blocks_current_position()const;
+         size_t                 total_block_size()const;
       private:
+         optional<index_entry> last_index_entry()const;
+         fc::path _index_filename;
          mutable std::fstream _blocks;
          mutable std::fstream _block_num_to_pos;
    };
